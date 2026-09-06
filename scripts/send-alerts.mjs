@@ -35,11 +35,18 @@ const {
   APP_URL = '',
 } = process.env
 
-const missing = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'SMTP_USER', 'SMTP_PASS']
-  .filter(k => !process.env[k])
-if (missing.length && !DRY_RUN) {
-  console.error(`Missing required secrets: ${missing.join(', ')}`)
-  process.exit(1)
+const REQUIRED = DRY_RUN
+  ? ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY']
+  : ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'SMTP_USER', 'SMTP_PASS']
+
+const missing = REQUIRED.filter(k => !process.env[k])
+if (missing.length) {
+  // Exit clean rather than failing. The blocker sweep runs every 15 minutes, and
+  // a repo whose secrets are not filled in yet should not mail a failure each
+  // time. Once the secrets exist, real errors below still fail the job loudly.
+  console.log(`Alerts not configured yet — missing: ${missing.join(', ')}`)
+  console.log('Add them under Settings -> Secrets and variables -> Actions. See README.md.')
+  process.exit(0)
 }
 
 const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
