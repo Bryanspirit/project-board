@@ -3,9 +3,13 @@ import { useAuth } from './lib/auth'
 import { isConfigured } from './lib/supabase'
 import { useBoard } from './hooks/useBoard'
 import { useWorkspaces } from './hooks/useWorkspaces'
+import { useFilters } from './hooks/useFilters'
 import type { Profile, Project, Task, TaskStatus, TeamRole } from './lib/types'
 
 import AuthGate, { useProfile } from './components/access/AuthGate'
+import AcceptInvite, { captureInviteFromUrl, pendingInviteToken } from './components/access/AcceptInvite'
+import { ToastProvider, useToast } from './lib/toast'
+
 import SettingsDialog from './components/SettingsDialog'
 import TaskDialog, { emptyDraft, toDraft } from './components/TaskDialog'
 import type { TaskDraft } from './components/TaskDialog'
@@ -27,11 +31,32 @@ import { ShowcasePage } from './components/program/ShowcasePage'
 import { MeetingList } from './components/collab/MeetingList'
 import { NotificationBell } from './components/collab/NotificationBell'
 
+import FilterBar from './components/filters/FilterBar'
+import MyTasks from './components/filters/MyTasks'
+import TrashPanel from './components/trash/TrashPanel'
+import CalendarView from './components/views/CalendarView'
+import TimelineView from './components/views/TimelineView'
+import AnalyticsPanel from './components/analytics/AnalyticsPanel'
+
+import InstallPrompt, { UpdateToast } from './pwa/InstallPrompt'
+import OfflineBanner from './pwa/OfflineBanner'
+
 import { cx } from './components/ui'
 
 /** Where you are in the drill-down: workspaces → one workspace → a board. */
 type Level = 'workspaces' | 'workspace' | 'board'
-type Tab = 'board' | 'meetings'
+type Tab = 'board' | 'calendar' | 'timeline' | 'meetings'
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'board', label: 'Board' },
+  { id: 'calendar', label: 'Calendar' },
+  { id: 'timeline', label: 'Timeline' },
+  { id: 'meetings', label: 'Meetings' },
+]
+
+// Read the invite out of the URL once, at module scope, so it is consumed
+// before any component effect can act on the hash.
+const INITIAL_INVITE = captureInviteFromUrl()
 
 function SetupNotice() {
   return (
@@ -98,6 +123,7 @@ function BoardApp() {
   const { user, signOut } = useAuth()
   const { profile } = useProfile()
   const ws = useWorkspaces(user?.id)
+  const toast = useToast()
 
   const [level, setLevel] = useState<Level>('workspaces')
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null)
@@ -108,7 +134,6 @@ function BoardApp() {
   const board = useBoard(user?.id, ws.activeWorkspaceId, level === 'board' ? activeTeamId : null)
 
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
-  const [query, setQuery] = useState('')
 
   const [taskDraft, setTaskDraft] = useState<TaskDraft | null>(null)
   const [projDraft, setProjDraft] = useState<ProjectDraft | null>(null)
@@ -117,11 +142,18 @@ function BoardApp() {
   const [showSettings, setShowSettings] = useState(false)
   const [showAdmin, setShowAdmin] = useState(false)
   const [showShowcase, setShowShowcase] = useState(false)
+  const [showTrash, setShowTrash] = useState(false)
+  const [showMyTasks, setShowMyTasks] = useState(false)
+  const [showAnalytics, setShowAnalytics] = useState(false)
 
   const workspace = ws.activeWorkspace
   const workspaceId = ws.activeWorkspaceId
   const isAdmin = workspaceId ? ws.isAdmin(workspaceId) : false
   const isProgramme = workspace?.kind === 'hackathon' || workspace?.kind === 'program'
+
+  // Filters are remembered per board, so switching teams does not carry a
+  // narrowing you set somewhere else.
+  const filters = useFilters(workspaceId ? `${workspaceId}:${activeTeamId ?? 'all'}` : null)
 
   // The "new request" email links straight to the approval queue.
   useEffect(() => {
@@ -141,14 +173,10 @@ function BoardApp() {
     [ws.workspaceMembers],
   )
 
-  const visibleTasks = useMemo(() => {
-    if (!active) return []
-    const all = board.byProject.get(active.id) ?? []
-    const q = query.trim().toLowerCase()
-    if (!q) return all
-    return all.filter(t =>
-      t.title.toLowerCase().includes(q) || (t.description ?? '').toLowerCase().includes(q))
-  }, [active, board.byProject, query])
+  const visibleTasks = useMemo(
+    () => (active ? filters.apply(board.byProject.get(active.id) ?? []) : []),
+    [active, board.byProject, filters],
+  )
 
   function openWorkspace(id: string) {
     ws.setActiveWorkspace(id)
@@ -161,6 +189,36 @@ function BoardApp() {
     setActiveTeamId(teamId)
     setTab('board')
     setLevel('board')
+  }
+
+  /** Jump to a task from anywhere — a mention, or the My tasks list. */
+  function revealTask(taskId: string, projectId: string) {
+    const t = board.tasks.find(x => x.id === taskId)
+    setLevel('board')
+    setTab('board')
+    setActiveProjectId(projectId)
+    if (t) setTaskDraft(toDraft(t))
+  }
+
+  // Deletes are recoverable now, so every one of them offers the way back.
+  async function removeTask(id: string) {
+    const trashed = await board.deleteTask(id)
+    if (!trashed) return
+    toast.show({
+      message: `Deleted “${trashed.label}”`,
+      actionLabel: 'Undo',
+      onAction: () => void trashed.undo(),
+    })
+  }
+
+  async function removeProject(id: string) {
+    const trashed = await board.deleteProject(id)
+    if (!trashed) return
+    toast.show({
+      message: `Deleted “${trashed.label}” and its tasks`,
+      actionLabel: 'Undo',
+      onAction: () => void trashed.undo(),
+    })
   }
 
   async function saveTask(d: TaskDraft) {
@@ -189,7 +247,6 @@ function BoardApp() {
     }
     if (d.id) await board.updateProject(d.id, payload)
     else {
-      // A project made from inside a team belongs to that team by default.
       const created = await board.createProject({ ...payload, team_id: payload.team_id ?? activeTeamId })
       if (created) setActiveProjectId(created.id)
     }
@@ -199,7 +256,9 @@ function BoardApp() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-200 px-4 py-2.5 sm:px-6 dark:border-slate-800">
+      <OfflineBanner />
+
+      <header className="safe-x flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-200 px-4 py-2.5 sm:px-6 dark:border-slate-800">
         <nav aria-label="Breadcrumb" className="flex min-w-0 flex-1 items-center gap-1 text-sm">
           <button
             onClick={() => { setLevel('workspaces'); setActiveTeamId(null) }}
@@ -235,12 +294,13 @@ function BoardApp() {
         </nav>
 
         {level === 'board' && workspaceId && (
-          <div className="flex items-center gap-0.5 rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
-            {(['board', 'meetings'] as Tab[]).map(t => (
-              <button key={t} onClick={() => setTab(t)}
-                className={cx('rounded-md px-2.5 py-1.5 text-xs font-medium capitalize transition',
-                  tab === t ? 'bg-white shadow-sm dark:bg-slate-700' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200')}>
-                {t}
+          <div className="flex items-center gap-0.5 overflow-x-auto rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
+            {TABS.map(t => (
+              <button key={t.id} onClick={() => setTab(t.id)}
+                aria-current={tab === t.id ? 'page' : undefined}
+                className={cx('shrink-0 rounded-md px-2.5 py-1.5 text-xs font-medium transition',
+                  tab === t.id ? 'bg-white shadow-sm dark:bg-slate-700' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200')}>
+                {t.label}
               </button>
             ))}
           </div>
@@ -248,15 +308,35 @@ function BoardApp() {
 
         <NotificationBell onOpenTask={id => {
           const t = board.tasks.find(x => x.id === id)
-          if (t) { setLevel('board'); setTab('board'); setActiveProjectId(t.project_id); setTaskDraft(toDraft(t)) }
+          if (t) revealTask(t.id, t.project_id)
         }} />
 
-        {isProgramme && level !== 'workspaces' && (
-          <IconButton label="Demo day showcase" onClick={() => setShowShowcase(true)}>
-            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M4 4h12v9H4zM8 17h4M10 13v4" strokeLinecap="round" />
-            </svg>
-          </IconButton>
+        <IconButton label="My tasks" onClick={() => setShowMyTasks(true)}>
+          <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M4 6h12M4 10h12M4 14h7" strokeLinecap="round" />
+          </svg>
+        </IconButton>
+
+        {level !== 'workspaces' && (
+          <>
+            {isProgramme && (
+              <IconButton label="Demo day showcase" onClick={() => setShowShowcase(true)}>
+                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M4 4h12v9H4zM8 17h4M10 13v4" strokeLinecap="round" />
+                </svg>
+              </IconButton>
+            )}
+            <IconButton label="Progress and burndown" onClick={() => setShowAnalytics(true)}>
+              <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M3 16V9M8 16V4M13 16v-5M17 16V7" strokeLinecap="round" />
+              </svg>
+            </IconButton>
+            <IconButton label="Trash" onClick={() => setShowTrash(true)}>
+              <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M4 6h12M8 6V4h4v2M6 6l.7 10h6.6L14 6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </IconButton>
+          </>
         )}
 
         {profile?.is_super_admin && (
@@ -290,6 +370,12 @@ function BoardApp() {
         <div role="alert" className="flex shrink-0 items-center gap-3 bg-rose-50 px-4 py-2 text-xs text-rose-700 sm:px-6 dark:bg-rose-950/50 dark:text-rose-300">
           <span className="flex-1">{board.error ?? ws.error}</span>
           <button onClick={() => { board.clearError(); ws.clearError() }} className="font-medium underline">Dismiss</button>
+        </div>
+      )}
+
+      {level === 'board' && tab === 'board' && board.projects.length > 0 && (
+        <div className="shrink-0 border-b border-slate-200 px-4 py-2 sm:px-6 dark:border-slate-800">
+          <FilterBar {...filters} people={people} />
         </div>
       )}
 
@@ -341,12 +427,36 @@ function BoardApp() {
             onNewProject={() => setProjDraft(projectDraft())}
             onEditProject={p => setProjDraft(projectDraft(p))}
             tasks={visibleTasks}
-            query={query}
-            onQuery={setQuery}
+            query={filters.filters.text}
+            onQuery={q => filters.setFilter('text', q)}
             loading={board.loading}
             onOpenTask={t => setTaskDraft(toDraft(t))}
             onAddTask={(status: TaskStatus) => setTaskDraft(emptyDraft(status))}
             onMoveTask={board.moveTask}
+            people={people}
+            teams={ws.teams}
+            onCreateTask={async (title, status) => {
+              if (active) await board.createTask({ title, status, project_id: active.id })
+            }}
+          />
+        )}
+
+        {level === 'board' && tab === 'calendar' && (
+          <CalendarView
+            workspaceId={workspaceId}
+            teamId={activeTeamId}
+            people={people}
+            onOpenTask={t => setTaskDraft(toDraft(t))}
+            className="p-4 sm:p-6"
+          />
+        )}
+
+        {level === 'board' && tab === 'timeline' && (
+          <TimelineView
+            workspaceId={workspaceId}
+            teamId={activeTeamId}
+            onOpenProject={p => setProjDraft(projectDraft(p))}
+            className="p-4 sm:p-6"
           />
         )}
 
@@ -367,7 +477,7 @@ function BoardApp() {
           draft={taskDraft}
           people={people}
           onSave={saveTask}
-          onDelete={board.deleteTask}
+          onDelete={id => void removeTask(id)}
           onClose={() => setTaskDraft(null)}
         />
       )}
@@ -378,7 +488,7 @@ function BoardApp() {
           teams={ws.teams}
           project={projDraft.id ? board.projects.find(p => p.id === projDraft.id) ?? null : null}
           onSave={saveProject}
-          onDelete={board.deleteProject}
+          onDelete={id => void removeProject(id)}
           onSaveSubmission={patch => board.updateProject(projDraft.id!, patch)}
           onClose={() => setProjDraft(null)}
         />
@@ -387,6 +497,8 @@ function BoardApp() {
       {wsDraft && (
         <WorkspaceDialog
           draft={wsDraft}
+          teams={ws.teams}
+          canManage={isAdmin || ws.isSuperAdmin}
           onSave={async d => {
             const patch = draftToPatch(d)
             if (d.id) await ws.updateWorkspace(d.id, patch)
@@ -431,15 +543,62 @@ function BoardApp() {
         <ShowcasePage workspaceId={workspaceId} onClose={() => setShowShowcase(false)} />
       )}
 
+      {showAnalytics && workspaceId && (
+        <AnalyticsPanel
+          workspaceId={workspaceId}
+          teamId={activeTeamId}
+          canManage={isAdmin}
+          onClose={() => setShowAnalytics(false)}
+        />
+      )}
+
+      {showTrash && workspaceId && (
+        <TrashPanel
+          workspaceId={workspaceId}
+          canPurge={profile?.is_super_admin === true}
+          onClose={() => setShowTrash(false)}
+          onRestored={() => void board.reload()}
+        />
+      )}
+
+      {showMyTasks && (
+        <MyTasks
+          onClose={() => setShowMyTasks(false)}
+          onOpenTask={(taskId, projectId) => revealTask(taskId, projectId)}
+        />
+      )}
+
+      <InstallPrompt />
+      <UpdateToast />
     </div>
   )
 }
 
 export default function App() {
+  // Held outside the gate: someone arriving on an invite link may not be signed
+  // in yet, and AuthGate would otherwise swap in the login screen and swallow
+  // the invite entirely.
+  const [inviteToken, setInviteToken] = useState<string | null>(
+    () => INITIAL_INVITE ?? pendingInviteToken())
+  const [joinedAt, setJoinedAt] = useState(0)
+
   if (!isConfigured) return <SetupNotice />
+
   return (
-    <AuthGate>
-      <BoardApp />
-    </AuthGate>
+    <ToastProvider>
+      {/* Remounting after a join reloads the profile and workspace list with
+          the membership the invite just granted. */}
+      <AuthGate key={joinedAt}>
+        <BoardApp />
+      </AuthGate>
+
+      {inviteToken && (
+        <AcceptInvite
+          token={inviteToken}
+          onAccepted={() => { setInviteToken(null); setJoinedAt(Date.now()) }}
+          onDismiss={() => setInviteToken(null)}
+        />
+      )}
+    </ToastProvider>
   )
 }

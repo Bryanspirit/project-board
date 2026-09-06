@@ -7,11 +7,28 @@ import type { Project, Task, TaskStatus } from '../lib/types'
 const ORDER_STEP = 1000
 
 /**
+ * What a delete hands back so the caller can offer an undo. The shape is
+ * deliberately loose and the whole result optional, so the existing callers
+ * that ignore it keep compiling untouched.
+ */
+export interface TrashedRef {
+  kind: 'project' | 'task'
+  id: string
+  /** Human name of what went to the trash, for the toast copy. */
+  label: string
+  /** Puts it straight back — wire this to the toast's action. */
+  undo: () => Promise<void>
+}
+
+/**
  * Loads the boards for one workspace, optionally narrowed to a single team.
  *
  * Visibility is not filtered here — row level security already returns only the
  * projects the caller may see, so a plain select is both correct and the only
  * thing that can be trusted. The workspace filter is for focus, not security.
+ *
+ * Deletes are recoverable: they stamp `deleted_at` rather than removing rows,
+ * and every read here excludes anything already in the trash.
  */
 export function useBoard(userId: string | undefined, workspaceId: string | null, teamId: string | null) {
   const [projects, setProjects] = useState<Project[]>([])
@@ -26,7 +43,8 @@ export function useBoard(userId: string | undefined, workspaceId: string | null,
     }
     setLoading(true)
 
-    let q = supabase.from('projects').select('*').eq('workspace_id', workspaceId)
+    let q = supabase.from('projects').select('*')
+      .eq('workspace_id', workspaceId).is('deleted_at', null)
     if (teamId) q = q.eq('team_id', teamId)
     const { data: p, error: pe } = await q.order('sort_order', { ascending: true })
 
@@ -36,7 +54,8 @@ export function useBoard(userId: string | undefined, workspaceId: string | null,
     let t: Task[] = []
     if (ids.length > 0) {
       const { data, error: te } = await supabase.from('tasks').select('*')
-        .in('project_id', ids).order('sort_order', { ascending: true })
+        .in('project_id', ids).is('deleted_at', null)
+        .order('sort_order', { ascending: true })
       if (te) { setError(te.message); setLoading(false); return }
       t = data as Task[]
     }
@@ -83,12 +102,24 @@ export function useBoard(userId: string | undefined, workspaceId: string | null,
     if (error) { setError(error.message); void load() }
   }, [load])
 
-  const deleteProject = useCallback(async (id: string) => {
+  /** Clears `deleted_at`; the DB trigger brings back exactly the tasks that
+   *  went down with the project. */
+  const restoreProject = useCallback(async (id: string) => {
+    const { error } = await supabase.from('projects').update({ deleted_at: null }).eq('id', id)
+    if (error) { setError(error.message); return }
+    await load()
+  }, [load])
+
+  /** Moves the project to the trash. Its tasks follow, by database trigger. */
+  const deleteProject = useCallback(async (id: string): Promise<TrashedRef | undefined> => {
+    const label = projects.find(p => p.id === id)?.name ?? 'Project'
     setProjects(prev => prev.filter(p => p.id !== id))
     setTasks(prev => prev.filter(t => t.project_id !== id))
-    const { error } = await supabase.from('projects').delete().eq('id', id)
-    if (error) { setError(error.message); void load() }
-  }, [load])
+    const { error } = await supabase.from('projects')
+      .update({ deleted_at: new Date().toISOString() }).eq('id', id)
+    if (error) { setError(error.message); void load(); return }
+    return { kind: 'project', id, label, undo: () => restoreProject(id) }
+  }, [projects, load, restoreProject])
 
   // ---------------------------------------------------------------- tasks --
   const createTask = useCallback(async (input: Partial<Task>) => {
@@ -113,11 +144,21 @@ export function useBoard(userId: string | undefined, workspaceId: string | null,
     setTasks(prev => prev.map(t => (t.id === id ? (data as Task) : t)))
   }, [load])
 
-  const deleteTask = useCallback(async (id: string) => {
-    setTasks(prev => prev.filter(t => t.id !== id))
-    const { error } = await supabase.from('tasks').delete().eq('id', id)
-    if (error) { setError(error.message); void load() }
+  const restoreTask = useCallback(async (id: string) => {
+    const { error } = await supabase.from('tasks').update({ deleted_at: null }).eq('id', id)
+    if (error) { setError(error.message); return }
+    await load()
   }, [load])
+
+  /** Moves the task to the trash rather than removing it. */
+  const deleteTask = useCallback(async (id: string): Promise<TrashedRef | undefined> => {
+    const label = tasks.find(t => t.id === id)?.title ?? 'Task'
+    setTasks(prev => prev.filter(t => t.id !== id))
+    const { error } = await supabase.from('tasks')
+      .update({ deleted_at: new Date().toISOString() }).eq('id', id)
+    if (error) { setError(error.message); void load(); return }
+    return { kind: 'task', id, label, undo: () => restoreTask(id) }
+  }, [tasks, load, restoreTask])
 
   /** Drop `id` into `status` at position `index` within the column it lands in. */
   const moveTask = useCallback(async (id: string, status: TaskStatus, index: number) => {
@@ -151,7 +192,7 @@ export function useBoard(userId: string | undefined, workspaceId: string | null,
 
   return {
     projects, tasks, byProject, loading, error, reload: load, clearError: () => setError(null),
-    createProject, updateProject, deleteProject,
-    createTask, updateTask, deleteTask, moveTask,
+    createProject, updateProject, deleteProject, restoreProject,
+    createTask, updateTask, deleteTask, restoreTask, moveTask,
   }
 }

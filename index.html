@@ -2,10 +2,50 @@
 <html lang="en" class="h-full">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover lets the app paint under a notch / home indicator;
+         the .safe-* utilities below keep content out from under them. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="Personal project management board" />
+
+    <!-- Address bar / status bar tint, matched to the app's own theme. -->
+    <meta name="theme-color" content="#f8fafc" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#020617" media="(prefers-color-scheme: dark)" />
+
+    <!-- iOS standalone launch. black-translucent puts the web view under the
+         status bar, which is what viewport-fit=cover assumes. -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Board" />
+
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗂️</text></svg>" />
+    <!-- Relative href: resolves inside the GitHub Pages sub-path. -->
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+
     <title>Project Board</title>
+
+    <style>
+      /* Safe-area helpers live here rather than in src/index.css so the PWA
+         shell owns them. env() falls back to 0px wherever there is no inset. */
+      :root {
+        --safe-top: env(safe-area-inset-top, 0px);
+        --safe-right: env(safe-area-inset-right, 0px);
+        --safe-bottom: env(safe-area-inset-bottom, 0px);
+        --safe-left: env(safe-area-inset-left, 0px);
+      }
+      .safe-top { padding-top: var(--safe-top); }
+      .safe-bottom { padding-bottom: var(--safe-bottom); }
+      .safe-x { padding-left: var(--safe-left); padding-right: var(--safe-right); }
+      .safe-inset { padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left); }
+      /* For a fixed bar that already has its own padding. */
+      .safe-mb { margin-bottom: var(--safe-bottom); }
+
+      /* Standalone launches have no browser chrome to absorb an overscroll
+         bounce, so pin the shell. */
+      @media (display-mode: standalone) {
+        html, body { overscroll-behavior-y: none; }
+      }
+    </style>
   </head>
   <body class="h-full">
     <div id="root" class="h-full"></div>

@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import type { Workspace, WorkspaceKind, WorkspaceRole } from '../../lib/types'
+import type { Workspace, WorkspaceKind, WorkspaceRole, Team } from '../../lib/types'
 import { PROJECT_COLORS } from '../../lib/types'
 import { Button, Field, Input, Modal, Select, Textarea, cx } from '../ui'
 import { generateJoinCode } from '../../hooks/useWorkspaces'
 import InviteCodePanel from './InviteCodePanel'
+import InviteLinkPanel from './InviteLinkPanel'
 
 export interface WorkspaceDraft {
   id?: string
@@ -22,7 +23,7 @@ export interface WorkspaceDraft {
 const KINDS: { id: WorkspaceKind; label: string; blurb: string }[] = [
   { id: 'personal',  label: 'Personal',  blurb: 'Private to you' },
   { id: 'team',      label: 'Team',      blurb: 'A standing group of people' },
-  { id: 'hackathon', label: 'Hackathon', blurb: 'A time-boxed event with teams and judging' },
+  { id: 'hackathon', label: 'Hackathon', blurb: 'A time-boxed event with teams and a demo day' },
   { id: 'program',   label: 'Programme', blurb: 'A cohort running over weeks or months' },
 ]
 
@@ -77,9 +78,12 @@ export function draftToPatch(d: WorkspaceDraft): Partial<Workspace> {
 }
 
 export default function WorkspaceDialog({
-  draft, onSave, onArchive, onRegenerateCode, onClose,
+  draft, teams = [], canManage = false, onSave, onArchive, onRegenerateCode, onClose,
 }: {
   draft: WorkspaceDraft
+  /** Teams in this workspace, so an invite can target one directly. */
+  teams?: Team[]
+  canManage?: boolean
   onSave: (d: WorkspaceDraft) => Promise<void> | void
   onArchive?: (id: string) => Promise<void> | void
   /** Writes a fresh code straight to the row; falls back to a local one. */
@@ -211,6 +215,10 @@ export default function WorkspaceDialog({
           onRoleChange={role => set('join_role', role)}
           onRegenerate={regenerate}
         />
+      )}
+
+      {showCode && draft.id && (
+        <InviteLinkPanel workspaceId={draft.id} teams={teams} canManage={canManage} />
       )}
     </Modal>
   )

@@ -175,15 +175,37 @@ try {
     { meeting_id: meeting.id, user_id: owner.id, response: 'accepted' })
   ok(attRes.status === 201, 'add a meeting attendee', attRes.text.slice(0, 120))
 
-  // ------------------------------------------------------------- judging ----
-  const critRes = await as(owner.jwt, '/rest/v1/judging_criteria', 'POST',
-    { workspace_id: ws.id, name: 'Impact', max_score: 10, weight: 2, sort_order: 1000 })
-  const crit = critRes.json?.[0]
-  ok(critRes.status === 201 && Boolean(crit), 'create a judging criterion', critRes.text.slice(0, 120))
+  // ------------------------------------------- trash and recoverable delete --
+  const trashTask = await as(owner.jwt, `/rest/v1/tasks?id=eq.${task.id}`, 'PATCH',
+    { deleted_at: new Date().toISOString() })
+  ok(trashTask.status === 200, 'soft-delete a task', trashTask.text.slice(0, 120))
 
-  const scoreRes = await as(owner.jwt, '/rest/v1/scores', 'POST',
-    { project_id: proj.id, criterion_id: crit.id, judge_id: owner.id, score: 8, notes: 'solid' })
-  ok(scoreRes.status === 201, 'submit a score', scoreRes.text.slice(0, 120))
+  const liveAfter = await as(owner.jwt, `/rest/v1/tasks?project_id=eq.${proj.id}&deleted_at=is.null&select=id`)
+  ok(liveAfter.json?.length === 0, 'trashed task drops out of the live board')
+
+  const restored = await as(owner.jwt, `/rest/v1/tasks?id=eq.${task.id}`, 'PATCH', { deleted_at: null })
+  ok(restored.status === 200 && restored.json?.[0]?.deleted_at === null, 'restore brings the task back')
+
+  // Trashing a project must carry its tasks down with it, by trigger.
+  await as(owner.jwt, `/rest/v1/projects?id=eq.${proj.id}`, 'PATCH',
+    { deleted_at: new Date().toISOString() })
+  const cascaded = await as(owner.jwt, `/rest/v1/tasks?id=eq.${task.id}&select=deleted_at`)
+  ok(Boolean(cascaded.json?.[0]?.deleted_at), 'trashing a project carries its tasks with it')
+
+  await as(owner.jwt, `/rest/v1/projects?id=eq.${proj.id}`, 'PATCH', { deleted_at: null })
+  const uncascaded = await as(owner.jwt, `/rest/v1/tasks?id=eq.${task.id}&select=deleted_at`)
+  ok(uncascaded.json?.[0]?.deleted_at === null, 'restoring a project brings those tasks back')
+
+  const healthLive = await as(owner.jwt, `/rest/v1/project_health?id=eq.${proj.id}&select=id`)
+  ok(healthLive.json?.length === 1, 'project_health shows a restored project')
+
+  // ------------------------------------------------------- invite links -----
+  const inviteToken = 'smoketoken' + String(stamp).slice(-8)
+  const linkRes = await as(owner.jwt, '/rest/v1/invite_links', 'POST', {
+    workspace_id: ws.id, team_id: team.id, token: inviteToken,
+    role: 'member', label: 'Smoke invite', max_uses: 1, created_by: owner.id,
+  })
+  ok(linkRes.status === 201, 'create an invite link', linkRes.text.slice(0, 120))
 
   // --------------------------------------------------- join code redeem ----
   const j = await signUp(joiner.email, PW, { full_name: 'Smoke Joiner' })
@@ -204,9 +226,6 @@ try {
   ok(joinerProjects.json?.length === 0,
     'joiner cannot see a team board they are not on', joinerProjects.text.slice(0, 120))
 
-  const joinerScores = await as(joiner.jwt, '/rest/v1/scores?select=id')
-  ok(joinerScores.json?.length === 0, 'a plain member cannot read judging scores')
-
   // ------------------------------------------------- approval by the admin --
   const ap = await signUp(applicant.email, PW, {
     full_name: 'Smoke Applicant', organization: 'Ashesi', role_title: 'Designer', country: 'Ghana',
@@ -218,20 +237,30 @@ try {
   ok(reqRow[0]?.status === 'pending', 'applicant queued for review')
 
   const review = await rpc(owner.jwt, 'review_access_request', {
-    request_id: reqRow[0].id, decision: 'approved', ws: ws.id, assign_role: 'judge', team: null, note: 'welcome',
+    request_id: reqRow[0].id, decision: 'approved', ws: ws.id, assign_role: 'admin', team: null, note: 'welcome',
   })
   ok(review.json?.ok === true, 'super admin approves the request', review.text.slice(0, 140))
 
   const applicantWs = await as(applicant.jwt, '/rest/v1/workspaces?select=id')
   ok(applicantWs.json?.length === 1, 'approved applicant can now see the workspace', applicantWs.text.slice(0, 120))
 
-  const judgeProjects = await as(applicant.jwt, '/rest/v1/projects?select=id')
-  ok(judgeProjects.json?.length === 1, 'a judge sees every project in the workspace', judgeProjects.text.slice(0, 120))
+  const adminProjects = await as(applicant.jwt, '/rest/v1/projects?select=id')
+  ok(adminProjects.json?.length === 1, 'an approved admin sees every project in the workspace',
+    adminProjects.text.slice(0, 120))
 
-  // A judge must not be able to edit the board they are scoring.
-  const judgeEdit = await as(applicant.jwt, `/rest/v1/projects?id=eq.${proj.id}`, 'PATCH', { name: 'hijacked' })
-  const judgeBlocked = judgeEdit.status === 403 || (judgeEdit.json?.length ?? 0) === 0
-  ok(judgeBlocked, 'a judge cannot edit a project', `status ${judgeEdit.status} ${judgeEdit.text.slice(0, 80)}`)
+  // The joiner is a plain member of a team they are not on — still nothing.
+  const joinerRedeem = await as(joiner.jwt, '/rest/v1/projects?select=id')
+  ok(joinerRedeem.json?.length === 0, "a plain member still cannot see another team's board")
+
+  // Judging is removed: the tables must be gone, not merely unused.
+  const goneScores = await as(owner.jwt, '/rest/v1/scores?select=id')
+  ok(goneScores.status >= 400, 'judging tables are gone', `status ${goneScores.status}`)
+
+  const linkRedeem = await rpc(joiner.jwt, 'redeem_invite_link', { link_token: inviteToken })
+  ok(linkRedeem.json?.ok === true, 'redeem an invite link', linkRedeem.text.slice(0, 140))
+
+  const reused = await rpc(applicant.jwt, 'redeem_invite_link', { link_token: inviteToken })
+  ok(reused.json?.ok === false, 'a single-use invite refuses a second redemption', reused.text.slice(0, 140))
 
   // ---------------------------------------------------------- rejection ----
   const rej = await rpc(owner.jwt, 'review_access_request', {

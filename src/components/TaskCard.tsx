@@ -1,6 +1,6 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import type { Task } from '../lib/types'
+import type { Profile, Task } from '../lib/types'
 import { PRIORITIES } from '../lib/types'
 import { dueTone, formatDue } from '../lib/dates'
 import { cx } from './ui'
@@ -12,9 +12,46 @@ const DUE_TONE = {
   later:   'bg-slate-100 text-slate-500 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700',
 }
 
-export function TaskBody({ task, dragging }: { task: Task; dragging?: boolean }) {
+/** What to call someone on a card: their name, or the local part of their email
+ *  when the profile has not been filled in yet. */
+export function personLabel(p: Profile): string {
+  const name = p.full_name?.trim()
+  if (name) return name
+  return p.email.split('@')[0] || p.email
+}
+
+/** Resolves `assignee_id` against the roster. Returns null when unassigned, and
+ *  also when the roster simply has not loaded — an avatar for "someone" is worse
+ *  than no avatar at all. */
+export function findAssignee(task: Task, people?: Profile[]): Profile | null {
+  if (!task.assignee_id || !people?.length) return null
+  return people.find(p => p.id === task.assignee_id) ?? null
+}
+
+function Avatar({ person }: { person: Profile }) {
+  const name = personLabel(person)
+  return (
+    <span
+      title={name}
+      aria-hidden
+      className={cx(
+        'ml-auto flex h-6 w-6 shrink-0 select-none items-center justify-center rounded-full',
+        'bg-indigo-600 text-[10px] font-semibold text-white ring-2 ring-white dark:ring-slate-900',
+      )}
+    >
+      {name.slice(0, 1).toUpperCase()}
+    </span>
+  )
+}
+
+export function TaskBody({ task, dragging, people }: {
+  task: Task
+  dragging?: boolean
+  people?: Profile[]
+}) {
   const priority = PRIORITIES.find(p => p.id === task.priority)!
   const tone = task.due_date && task.status !== 'done' ? dueTone(task.due_date) : 'later'
+  const assignee = findAssignee(task, people)
 
   return (
     <div className={cx(
@@ -58,14 +95,21 @@ export function TaskBody({ task, dragging }: { task: Task; dragging?: boolean })
             {formatDue(task.due_date)}
           </span>
         )}
+        {assignee && <Avatar person={assignee} />}
       </div>
     </div>
   )
 }
 
-export default function TaskCard({ task, onOpen }: { task: Task; onOpen: (t: Task) => void }) {
+export default function TaskCard({ task, onOpen, people }: {
+  task: Task
+  onOpen: (t: Task) => void
+  people?: Profile[]
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id, data: { status: task.status } })
+
+  const assignee = findAssignee(task, people)
 
   return (
     <li
@@ -78,9 +122,11 @@ export default function TaskCard({ task, onOpen }: { task: Task; onOpen: (t: Tas
       onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onOpen(task) } }}
       role="button"
       tabIndex={0}
-      aria-label={`Open task ${task.title}`}
+      aria-label={assignee
+        ? `Open task ${task.title}, assigned to ${personLabel(assignee)}`
+        : `Open task ${task.title}`}
     >
-      <TaskBody task={task} />
+      <TaskBody task={task} people={people} />
     </li>
   )
 }
