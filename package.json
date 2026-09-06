@@ -13,7 +13,8 @@
     "alerts:access": "node scripts/send-alerts.mjs access",
     "alerts:mentions": "node scripts/send-alerts.mjs mentions",
     "alerts:meetings": "node scripts/send-alerts.mjs meetings",
-    "alerts:admin-digest": "node scripts/send-alerts.mjs admin-digest"
+    "alerts:admin-digest": "node scripts/send-alerts.mjs admin-digest",
+    "smoke": "node scripts/smoke-test.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
