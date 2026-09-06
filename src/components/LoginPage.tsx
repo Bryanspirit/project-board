@@ -1,6 +1,11 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Button, Field, Input, Spinner } from './ui'
+
+/** Google sign-in only appears once the provider is actually configured in
+ *  Supabase — set VITE_GOOGLE_AUTH=1 for that build. Otherwise the button is a
+ *  dead end that returns "provider is not enabled". */
+const GOOGLE_ENABLED = import.meta.env.VITE_GOOGLE_AUTH === '1'
 import RequestAccessForm from './access/RequestAccessForm'
 
 type Mode = 'signin' | 'request' | 'reset'
@@ -52,7 +57,13 @@ export default function LoginPage() {
       provider: 'google',
       options: { redirectTo: window.location.href },
     })
-    if (error) setError(error.message)
+    // Supabase answers an unconfigured provider with "Unsupported provider",
+    // which tells a visitor nothing they can act on.
+    if (error) {
+      setError(/provider is not enabled|unsupported provider/i.test(error.message)
+        ? 'Google sign-in is not set up for this site yet. Use your email and password instead.'
+        : error.message)
+    }
   }
 
   const copy = COPY[mode]
@@ -103,7 +114,7 @@ export default function LoginPage() {
               {copy.cta}
             </Button>
 
-            {mode === 'signin' && (
+            {mode === 'signin' && GOOGLE_ENABLED && (
               <>
                 <div className="flex items-center gap-3 text-xs text-slate-400">
                   <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
