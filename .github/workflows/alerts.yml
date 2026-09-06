@@ -1,0 +1,66 @@
+name: Email alerts
+
+on:
+  schedule:
+    # Times are UTC. Ghana is UTC+0 year-round, so these are local times too.
+    - cron: '0 6 * * 1-5'    # daily digest, weekday mornings at 06:00
+    - cron: '0 7 * * 1'      # weekly summary, Monday at 07:00
+    - cron: '*/15 * * * *'   # blocker sweep, every 15 minutes
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Which alert to run
+        required: true
+        default: daily
+        type: choice
+        options: [daily, weekly, blocked]
+      dry_run:
+        description: Print the emails instead of sending them
+        type: boolean
+        default: false
+
+# Never let a slow run overlap the next scheduled one.
+concurrency:
+  group: alerts-${{ github.event.schedule || inputs.mode }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Pick alert mode
+        id: mode
+        # Maps each cron expression back to the alert it belongs to. A manual
+        # run uses the dropdown instead.
+        run: |
+          case "${{ github.event.schedule }}" in
+            "0 6 * * 1-5")  echo "value=daily"   >> "$GITHUB_OUTPUT" ;;
+            "0 7 * * 1")    echo "value=weekly"  >> "$GITHUB_OUTPUT" ;;
+            "*/15 * * * *") echo "value=blocked" >> "$GITHUB_OUTPUT" ;;
+            *)              echo "value=${{ inputs.mode || 'daily' }}" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Send ${{ steps.mode.outputs.value }} alerts
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          APP_URL: ${{ vars.APP_URL }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+        run: node scripts/send-alerts.mjs ${{ steps.mode.outputs.value }}
