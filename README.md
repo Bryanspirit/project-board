@@ -25,70 +25,69 @@ Nothing needs a server you have to keep alive.
 
 ## Setup
 
-Roughly 15 minutes, once.
+The Supabase project, database schema, auth URLs, GitHub Pages and most repository
+secrets are **already provisioned** (see [Provisioned setup](#provisioned-setup) below).
+Only the Gmail credentials are left — everything in this section is the record of how it
+was done, and what to repeat if you ever rebuild it from scratch.
 
-### 1. Create the Supabase project
+### Provisioned setup
 
-1. Sign up at [supabase.com](https://supabase.com) and create a new project. Any region; pick the closest one.
-2. Once it finishes provisioning, open **SQL Editor → New query**, paste the whole of
-   [`db/schema.sql`](db/schema.sql), and click **Run**.
-   This creates the `profiles`, `projects` and `tasks` tables, the lifecycle triggers, and
-   the row level security policies. It is safe to run again later.
-3. Open **Project Settings → API** and copy three values — you will need all of them:
-   - **Project URL** (`https://xxxx.supabase.co`)
-   - **anon / public key** — safe to publish; it only ever grants what RLS allows
-   - **service_role key** — **secret**. Only ever goes into a GitHub secret, never the browser bundle.
+| Thing | Value |
+| --- | --- |
+| Supabase project | `project-board` — ref `fvgvvkrsncynsfphhvfx`, West EU (Ireland) |
+| API URL | `https://fvgvvkrsncynsfphhvfx.supabase.co` |
+| Site URL / redirects | `https://bryanspirit.github.io/project-board/**` and `http://localhost:5173/**` |
+| Email confirmation | Off — signup is immediate |
+| Live site | https://bryanspirit.github.io/project-board/ |
 
-### 2. Turn on Google sign-in (optional)
+### Still to do: Gmail credentials
 
-Supabase → **Authentication → Providers → Google**. Follow their instructions to get a
-Google OAuth client ID and secret. Skip this and email/password still works fine.
+Alerts go out through Gmail SMTP using an app password, never your real password.
+This is the one step no CLI can perform for you.
 
-While you are in **Authentication → URL Configuration**, add your Pages URL
-(`https://<your-username>.github.io/<repo>/`) to **Redirect URLs**, so confirmation and
-password-reset links come back to the right place.
+1. Enable 2-Step Verification on your Google account.
+2. Create an app password at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords),
+   named e.g. `project-board`, and copy the 16-character code.
+3. Set the three remaining secrets:
 
-> If you would rather not confirm your email address on first signup, turn off
-> **Authentication → Sign In / Providers → Confirm email**.
+   ```bash
+   gh secret set SMTP_USER -R Bryanspirit/project-board -b "you@gmail.com"
+   gh secret set SMTP_PASS -R Bryanspirit/project-board -b "abcdefghijklmnop"
+   gh secret set MAIL_FROM -R Bryanspirit/project-board -b "Project Board <you@gmail.com>"
+   ```
 
-### 3. Create a Gmail app password
+Until those exist the alert job logs what is missing and exits successfully, so the
+15-minute blocker sweep does not fill your inbox with workflow failures.
 
-Alerts are sent through Gmail's SMTP server using an app password — not your real password.
+### Rebuilding from scratch
 
-1. Your Google account needs 2-Step Verification enabled.
-2. Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords),
-   create one named `project-board`, and copy the 16-character code.
+```bash
+supabase login
+supabase projects create project-board --org-id <org> --db-password <pw> --region eu-west-1
+supabase link --project-ref <new-ref>
+supabase db push       # applies supabase/migrations/
+supabase config push   # applies the [auth] site_url and redirect allow-list
+```
 
-### 4. Add the repository secrets
-
-In your GitHub repo: **Settings → Secrets and variables → Actions**.
-
-Under **Secrets**, add:
+Then point the repository secrets at the new project:
 
 | Secret | Value |
 | --- | --- |
-| `VITE_SUPABASE_URL` | Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | Supabase anon key |
-| `SUPABASE_URL` | Same project URL again (used by the alert job) |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase **service_role** key |
-| `SMTP_HOST` | `smtp.gmail.com` |
-| `SMTP_PORT` | `465` |
-| `SMTP_USER` | Your Gmail address |
-| `SMTP_PASS` | The 16-character app password |
-| `MAIL_FROM` | e.g. `Project Board <you@gmail.com>` |
+| `VITE_SUPABASE_URL` / `SUPABASE_URL` | Project URL |
+| `VITE_SUPABASE_ANON_KEY` | anon key — safe to publish; RLS is what protects the data |
+| `SUPABASE_SERVICE_ROLE_KEY` | service_role key — **secret**, bypasses RLS, Actions only |
+| `SMTP_HOST` / `SMTP_PORT` | `smtp.gmail.com` / `465` |
+| `SMTP_USER` / `SMTP_PASS` / `MAIL_FROM` | Gmail address, app password, From header |
 
-Under **Variables**, add:
+and the `APP_URL` *variable* to the Pages URL, which turns the "Open the board" button
+in each email into a working link.
 
-| Variable | Value |
-| --- | --- |
-| `APP_URL` | `https://<your-username>.github.io/<repo>/` — turns the "Open the board" button in emails into a working link |
+Pages itself is served from GitHub Actions (**Settings → Pages → Source: GitHub Actions**).
 
-### 5. Turn on Pages
+### Google sign-in (optional)
 
-**Settings → Pages → Build and deployment → Source: GitHub Actions.**
-
-Then push to `main` (or run the **Deploy to GitHub Pages** workflow manually). Your board
-goes live at `https://<your-username>.github.io/<repo>/`.
+Supabase → **Authentication → Providers → Google**, then supply a Google OAuth client ID
+and secret. Email/password works without it; the button is already in the UI.
 
 ---
 
@@ -150,7 +149,9 @@ src/
     dates.ts           Timezone-safe due-date maths on 'YYYY-MM-DD' strings
   hooks/useBoard.ts    All reads and writes; optimistic updates + realtime sync
   components/          Board, Column, TaskCard, dialogs, sidebar, login
-db/schema.sql          Tables, triggers, RLS policies — run once in Supabase
+supabase/
+  config.toml          Auth URLs and project config, pushed with `supabase config push`
+  migrations/          Tables, triggers, RLS policies, applied with `supabase db push`
 scripts/send-alerts.mjs  The three alert emails, run by Actions
 .github/workflows/     Pages deploy + the alert schedules
 ```
