@@ -1,7 +1,10 @@
 import { useState } from 'react'
-import type { Project, ProjectStatus } from '../lib/types'
+import type { Project, ProjectStatus, Team } from '../lib/types'
 import { PROJECT_COLORS } from '../lib/types'
 import { Button, Field, Input, Modal, Select, Textarea, cx } from './ui'
+import { SubmissionPanel } from './program/SubmissionPanel'
+import type { SubmissionPatch } from '../hooks/useMilestones'
+import { AttachmentList } from './collab/AttachmentList'
 
 export interface ProjectDraft {
   id?: string
@@ -10,6 +13,7 @@ export interface ProjectDraft {
   color: string
   status: ProjectStatus
   due_date: string
+  team_id: string
 }
 
 export function projectDraft(p?: Project): ProjectDraft {
@@ -20,6 +24,7 @@ export function projectDraft(p?: Project): ProjectDraft {
     color: p?.color ?? PROJECT_COLORS[0],
     status: p?.status ?? 'active',
     due_date: p?.due_date ?? '',
+    team_id: p?.team_id ?? '',
   }
 }
 
@@ -30,10 +35,16 @@ const STATUSES: { id: ProjectStatus; label: string }[] = [
   { id: 'archived', label: 'Archived' },
 ]
 
-export default function ProjectDialog({ draft, onSave, onDelete, onClose }: {
+export default function ProjectDialog({
+  draft, teams = [], project, onSave, onDelete, onSaveSubmission, onClose,
+}: {
   draft: ProjectDraft
+  teams?: Team[]
+  /** The saved row, when editing — submission links live on it, not the draft. */
+  project?: Project | null
   onSave: (d: ProjectDraft) => Promise<void> | void
   onDelete?: (id: string) => void
+  onSaveSubmission?: (patch: SubmissionPatch) => Promise<unknown>
   onClose: () => void
 }) {
   const [form, setForm] = useState(draft)
@@ -88,6 +99,13 @@ export default function ProjectDialog({ draft, onSave, onDelete, onClose }: {
         </Field>
       </div>
 
+      <Field label="Team" hint="Only this team sees the board. Leave unset to share it with the whole workspace.">
+        <Select value={form.team_id} onChange={e => set('team_id', e.target.value)}>
+          <option value="">Whole workspace</option>
+          {teams.map(t => <option key={t.id} value={t.id}>{t.emoji} {t.name}</option>)}
+        </Select>
+      </Field>
+
       <Field label="Colour">
         <div className="flex flex-wrap gap-2">
           {PROJECT_COLORS.map(c => (
@@ -104,6 +122,12 @@ export default function ProjectDialog({ draft, onSave, onDelete, onClose }: {
           ))}
         </div>
       </Field>
+
+      {project && onSaveSubmission && (
+        <SubmissionPanel project={project} canEdit onSave={onSaveSubmission} />
+      )}
+
+      {project && <AttachmentList projectId={project.id} canEdit />}
     </Modal>
   )
 }

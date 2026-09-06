@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { Project, Task } from '../lib/types'
 import { Button, cx } from './ui'
 
@@ -7,7 +8,7 @@ function progress(tasks: Task[]) {
 }
 
 export default function Sidebar({
-  projects, byProject, activeId, onSelect, onNew, onEdit, open, onClose,
+  projects, byProject, activeId, onSelect, onNew, onEdit, open, onClose, header,
 }: {
   projects: Project[]
   byProject: Map<string, Task[]>
@@ -17,6 +18,8 @@ export default function Sidebar({
   onEdit: (p: Project) => void
   open: boolean
   onClose: () => void
+  /** Workspace switcher and team list, rendered above the project list. */
+  header?: ReactNode
 }) {
   const visible = projects.filter(p => p.status !== 'archived')
   const archived = projects.filter(p => p.status === 'archived')
@@ -82,10 +85,12 @@ export default function Sidebar({
         'fixed inset-y-0 left-0 transition-transform lg:static lg:translate-x-0',
         open ? 'translate-x-0' : '-translate-x-full',
       )}>
-        <div className="flex items-center gap-2 px-4 py-4">
-          <span className="text-lg" aria-hidden>🗂️</span>
-          <span className="text-sm font-semibold tracking-tight">Project Board</span>
-        </div>
+        {header ?? (
+          <div className="flex items-center gap-2 px-4 py-4">
+            <span className="text-lg" aria-hidden>🗂️</span>
+            <span className="text-sm font-semibold tracking-tight">Project Board</span>
+          </div>
+        )}
 
         <nav className="flex-1 overflow-y-auto px-2.5 pb-4">
           <h2 className="px-2.5 py-1.5 text-[10px] font-semibold tracking-wider text-slate-400 uppercase">

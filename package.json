@@ -9,7 +9,11 @@
     "preview": "vite preview",
     "alerts:daily": "node scripts/send-alerts.mjs daily",
     "alerts:weekly": "node scripts/send-alerts.mjs weekly",
-    "alerts:blocked": "node scripts/send-alerts.mjs blocked"
+    "alerts:blocked": "node scripts/send-alerts.mjs blocked",
+    "alerts:access": "node scripts/send-alerts.mjs access",
+    "alerts:mentions": "node scripts/send-alerts.mjs mentions",
+    "alerts:meetings": "node scripts/send-alerts.mjs meetings",
+    "alerts:admin-digest": "node scripts/send-alerts.mjs admin-digest"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

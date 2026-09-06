@@ -6,53 +6,76 @@ import type { Project, Task, TaskStatus } from '../lib/types'
  *  neighbours, so a reorder touches exactly one row instead of the whole column. */
 const ORDER_STEP = 1000
 
-export function useBoard(userId: string | undefined) {
+/**
+ * Loads the boards for one workspace, optionally narrowed to a single team.
+ *
+ * Visibility is not filtered here — row level security already returns only the
+ * projects the caller may see, so a plain select is both correct and the only
+ * thing that can be trusted. The workspace filter is for focus, not security.
+ */
+export function useBoard(userId: string | undefined, workspaceId: string | null, teamId: string | null) {
   const [projects, setProjects] = useState<Project[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    if (!userId) return
-    setLoading(true)
-    const [p, t] = await Promise.all([
-      supabase.from('projects').select('*').order('sort_order', { ascending: true }),
-      supabase.from('tasks').select('*').order('sort_order', { ascending: true }),
-    ])
-    if (p.error) setError(p.error.message)
-    else if (t.error) setError(t.error.message)
-    else {
-      setError(null)
-      setProjects(p.data as Project[])
-      setTasks(t.data as Task[])
+    if (!userId || !workspaceId) {
+      setProjects([]); setTasks([]); setLoading(false)
+      return
     }
+    setLoading(true)
+
+    let q = supabase.from('projects').select('*').eq('workspace_id', workspaceId)
+    if (teamId) q = q.eq('team_id', teamId)
+    const { data: p, error: pe } = await q.order('sort_order', { ascending: true })
+
+    if (pe) { setError(pe.message); setLoading(false); return }
+
+    const ids = (p as Project[]).map(x => x.id)
+    let t: Task[] = []
+    if (ids.length > 0) {
+      const { data, error: te } = await supabase.from('tasks').select('*')
+        .in('project_id', ids).order('sort_order', { ascending: true })
+      if (te) { setError(te.message); setLoading(false); return }
+      t = data as Task[]
+    }
+
+    setError(null)
+    setProjects(p as Project[])
+    setTasks(t)
     setLoading(false)
-  }, [userId])
+  }, [userId, workspaceId, teamId])
 
   useEffect(() => { void load() }, [load])
 
-  // Keep other open tabs / devices in step. Realtime is a nicety here — if the
-  // publication is not enabled the board still works, it just won't live-update.
+  // Keep other open tabs and teammates in step.
   useEffect(() => {
-    if (!userId) return
+    if (!userId || !workspaceId) return
     const channel = supabase
-      .channel('board-sync')
+      .channel(`board-${workspaceId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => void load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => void load())
       .subscribe()
     return () => { void supabase.removeChannel(channel) }
-  }, [userId, load])
+  }, [userId, workspaceId, load])
 
   // ------------------------------------------------------------- projects --
   const createProject = useCallback(async (input: Partial<Project>) => {
-    if (!userId) return
+    if (!userId || !workspaceId) return
     const sort_order = (projects.at(-1)?.sort_order ?? 0) + ORDER_STEP
-    const { data, error } = await supabase.from('projects')
-      .insert({ ...input, user_id: userId, sort_order }).select().single()
+    const { data, error } = await supabase.from('projects').insert({
+      ...input,
+      workspace_id: input.workspace_id ?? workspaceId,
+      team_id: input.team_id ?? teamId,
+      user_id: userId,
+      created_by: userId,
+      sort_order,
+    }).select().single()
     if (error) return setError(error.message)
     setProjects(prev => [...prev, data as Project])
     return data as Project
-  }, [userId, projects])
+  }, [userId, workspaceId, teamId, projects])
 
   const updateProject = useCallback(async (id: string, patch: Partial<Project>) => {
     setProjects(prev => prev.map(p => (p.id === id ? { ...p, ...patch } : p)))
@@ -74,7 +97,8 @@ export function useBoard(userId: string | undefined) {
     const siblings = tasks.filter(t => t.project_id === input.project_id && t.status === status)
     const sort_order = (siblings.at(-1)?.sort_order ?? 0) + ORDER_STEP
     const { data, error } = await supabase.from('tasks')
-      .insert({ ...input, user_id: userId, status, sort_order }).select().single()
+      .insert({ ...input, user_id: userId, created_by: userId, status, sort_order })
+      .select().single()
     if (error) return setError(error.message)
     setTasks(prev => [...prev, data as Task])
     return data as Task

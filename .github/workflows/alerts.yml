@@ -6,6 +6,10 @@ on:
     - cron: '0 6 * * 1-5'    # daily digest, weekday mornings at 06:00
     - cron: '0 7 * * 1'      # weekly summary, Monday at 07:00
     - cron: '*/15 * * * *'   # blocker sweep, every 15 minutes
+    - cron: '5-59/15 * * * *'  # approval queue sweep, every 15 minutes (offset)
+    - cron: '10-59/15 * * * *' # @mention digests, every 15 minutes (offset)
+    - cron: '20 * * * *'     # meeting reminders, hourly
+    - cron: '30 7 * * 1'     # admin roll-up, Monday at 07:30 (after the weekly)
   workflow_dispatch:
     inputs:
       mode:
@@ -13,15 +17,18 @@ on:
         required: true
         default: daily
         type: choice
-        options: [daily, weekly, blocked]
+        options: [daily, weekly, blocked, access, mentions, meetings, admin-digest]
       dry_run:
         description: Print the emails instead of sending them
         type: boolean
         default: false
 
-# Never let a slow run overlap the next scheduled one.
+# Never let a slow run overlap the next scheduled one. Each mode gets its own
+# group so the hourly meeting sweep cannot be held up behind the weekly roll-up,
+# but two runs of the same mode still queue rather than race for the "notified"
+# stamps.
 concurrency:
-  group: alerts-${{ github.event.schedule || inputs.mode }}
+  group: alerts-${{ github.event.schedule || inputs.mode || 'manual' }}
   cancel-in-progress: false
 
 permissions:
@@ -46,10 +53,14 @@ jobs:
         # run uses the dropdown instead.
         run: |
           case "${{ github.event.schedule }}" in
-            "0 6 * * 1-5")  echo "value=daily"   >> "$GITHUB_OUTPUT" ;;
-            "0 7 * * 1")    echo "value=weekly"  >> "$GITHUB_OUTPUT" ;;
-            "*/15 * * * *") echo "value=blocked" >> "$GITHUB_OUTPUT" ;;
-            *)              echo "value=${{ inputs.mode || 'daily' }}" >> "$GITHUB_OUTPUT" ;;
+            "0 6 * * 1-5")      echo "value=daily"        >> "$GITHUB_OUTPUT" ;;
+            "0 7 * * 1")        echo "value=weekly"       >> "$GITHUB_OUTPUT" ;;
+            "*/15 * * * *")     echo "value=blocked"      >> "$GITHUB_OUTPUT" ;;
+            "5-59/15 * * * *")  echo "value=access"       >> "$GITHUB_OUTPUT" ;;
+            "10-59/15 * * * *") echo "value=mentions"     >> "$GITHUB_OUTPUT" ;;
+            "20 * * * *")       echo "value=meetings"     >> "$GITHUB_OUTPUT" ;;
+            "30 7 * * 1")       echo "value=admin-digest" >> "$GITHUB_OUTPUT" ;;
+            *)                  echo "value=${{ inputs.mode || 'daily' }}" >> "$GITHUB_OUTPUT" ;;
           esac
 
       - name: Send ${{ steps.mode.outputs.value }} alerts
@@ -61,6 +72,7 @@ jobs:
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           APP_URL: ${{ vars.APP_URL }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
         run: node scripts/send-alerts.mjs ${{ steps.mode.outputs.value }}

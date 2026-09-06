@@ -1,13 +1,60 @@
 # 🗂️ Project Board
 
-A personal Kanban board for tracking all your projects, hosted free on GitHub Pages,
-with real email/password sign-in and automatic email alerts.
+A project management platform for running your own work **and** multi-team programmes
+like hackathons, hosted free on GitHub Pages.
 
-- **Board** — drag-and-drop columns (Backlog → To Do → In Progress → Blocked → Done), one board per project
-- **Auth** — email + password and Google sign-in, with password reset
-- **Private** — Postgres row level security means only you can read your rows, enforced by the database, not the UI
-- **Email alerts** — weekday digest, Monday summary, and blocker alerts, each individually switchable
+- **Workspaces** — `Personal` for your private work, plus programme workspaces like a
+  hackathon or `Orion EdX`. You only ever see workspaces you belong to.
+- **Teams** — teams inside a workspace own their own projects and boards
+- **Board** — drag-and-drop columns (Backlog → To Do → In Progress → Blocked → Done)
+- **Access gate** — people request access with a full profile; nobody gets in until you
+  approve them, or they redeem a workspace join code
+- **Admin dashboard** — approval queue, member and role management, and a cross-project
+  progress table that flags at-risk work
+- **Programme tools** — milestones with a live countdown, submission links, a demo-day
+  showcase page, and weighted judging with a leaderboard
+- **Collaboration** — comments with @mentions, link attachments, and meetings that email
+  attendees a real calendar invite
+- **Email alerts** — seven kinds, each individually switchable
+- **Private by construction** — Postgres row level security decides every read and write,
+  so the database enforces access, not the UI
 - **Dark mode**, keyboard accessible, works on phones
+
+---
+
+## How access works
+
+```
+Someone signs up  ──►  profile status = 'pending'  ──►  they can read NOTHING
+                            │
+                            ├──► instant email to you (Edge Function)
+                            │    + a 15-min sweep as the safety net
+                            │
+                            └──►  you approve in the admin dashboard
+                                  choosing workspace + role (+ team)
+                                        │
+                                        └──►  status = 'active', they see only
+                                              what their membership allows
+
+Shortcut: anyone entering a workspace join code is admitted to that
+workspace automatically, without joining the approval queue.
+```
+
+The gate is a database policy, not a screen. A pending account that reached the app
+anyway would still read an empty database — verified by the test suite.
+
+### Roles
+
+| Role | Sees | Can |
+| --- | --- | --- |
+| **Super admin** (you) | Everything | Approve signups, create workspaces |
+| **Owner / Admin** | One whole workspace | Manage teams, members, every project |
+| **Manager** | Their teams | Run projects |
+| **Judge** | Every project in the workspace | Score, but not edit |
+| **Member** | Their teams' projects | Work on their boards |
+
+Scores are visible to the judge who wrote them and to workspace admins — never to the
+teams being judged. Publishing results stays a deliberate act on your side.
 
 ---
 
@@ -97,7 +144,15 @@ and secret. Email/password works without it; the button is already in the UI.
 | --- | --- | --- |
 | **Daily digest** | Weekdays 06:00 UTC | Overdue, due today, due within 3 days, and anything still blocked |
 | **Weekly summary** | Mondays 07:00 UTC | Per-project progress bars, what closed last week, what is due this week |
-| **Blocker alert** | Checked every 15 minutes | Tasks that just landed in the Blocked column, with the reason you typed |
+| **Blocker alert** | Every 15 minutes | Tasks that just landed in the Blocked column, with the reason you typed |
+| **Access request** | Instantly, + swept every 15 min | Someone asked to join — every field they submitted |
+| **Approval / decline** | Every 15 minutes | Tells the applicant the outcome |
+| **@mentions** | Every 15 minutes | Who mentioned you, on which task, with the comment |
+| **Meeting reminder** | Hourly | Meetings inside 24h, in each attendee's own timezone, with an `.ics` invite |
+| **Admin roll-up** | Mondays 07:30 UTC | Every team's progress, at-risk projects, pending requests |
+
+A task lands in the digest of its **assignee** when it has one, otherwise its creator —
+so it reaches exactly one inbox rather than two.
 
 Ghana is UTC+0 year-round, so those are local times. To shift them, edit the `cron`
 lines in [`.github/workflows/alerts.yml`](.github/workflows/alerts.yml).
