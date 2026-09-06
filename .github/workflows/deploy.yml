@@ -34,7 +34,6 @@ jobs:
           # security in Postgres is what actually protects the data.
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-          VITE_GOOGLE_AUTH: ${{ vars.VITE_GOOGLE_AUTH }}
         run: npm run build
 
       - name: Add SPA + Jekyll guards

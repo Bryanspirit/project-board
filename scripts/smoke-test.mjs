@@ -262,6 +262,44 @@ try {
   const reused = await rpc(applicant.jwt, 'redeem_invite_link', { link_token: inviteToken })
   ok(reused.json?.ok === false, 'a single-use invite refuses a second redemption', reused.text.slice(0, 140))
 
+  // -------------------------------------------------- password recovery ----
+  // The reset link is the only way back in for someone who forgets, and the app
+  // has to complete it — signing them in without letting them set a new
+  // password would leave the forgotten one in force.
+  const resetEmail = `smoke.reset.${stamp}@example.com`
+  const OLD_PW = 'OldPassword-123', NEW_PW = 'BrandNewPassword-456'
+  const ru = await admin('/auth/v1/admin/users', 'POST',
+    { email: resetEmail, password: OLD_PW, email_confirm: true })
+  created.push(ru.id)
+
+  const link = await admin('/auth/v1/admin/generate_link', 'POST',
+    { type: 'recovery', email: resetEmail })
+  const tokenHash = link.hashed_token ?? link.properties?.hashed_token
+  ok(Boolean(tokenHash), 'recovery link generated')
+
+  const verified = await (await fetch(`${base}/auth/v1/verify`, {
+    method: 'POST', headers: { apikey: ANON, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'recovery', token_hash: tokenHash }),
+  })).json()
+  ok(Boolean(verified.access_token), 'recovery link yields a session')
+
+  if (verified.access_token) {
+    const upd = await fetch(`${base}/auth/v1/user`, {
+      method: 'PUT',
+      headers: {
+        apikey: ANON, Authorization: `Bearer ${verified.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ password: NEW_PW }),
+    })
+    ok(upd.ok, 'the new password is accepted', String(upd.status))
+  }
+
+  const newLogin = await signIn(resetEmail, NEW_PW)
+  ok(Boolean(newLogin.access_token), 'can sign in with the new password')
+  const oldLogin = await signIn(resetEmail, OLD_PW)
+  ok(!oldLogin.access_token, 'the old password stops working')
+
   // ---------------------------------------------------------- rejection ----
   const rej = await rpc(owner.jwt, 'review_access_request', {
     request_id: reqRow[0].id, decision: 'rejected', ws: null, note: 'changed my mind',

@@ -7,6 +7,7 @@ import { useFilters } from './hooks/useFilters'
 import type { Profile, Project, Task, TaskStatus, TeamRole } from './lib/types'
 
 import AuthGate, { useProfile } from './components/access/AuthGate'
+import ResetPassword from './components/access/ResetPassword'
 import AcceptInvite, { captureInviteFromUrl, pendingInviteToken } from './components/access/AcceptInvite'
 import { ToastProvider, useToast } from './lib/toast'
 
@@ -581,8 +582,13 @@ export default function App() {
   const [inviteToken, setInviteToken] = useState<string | null>(
     () => INITIAL_INVITE ?? pendingInviteToken())
   const [joinedAt, setJoinedAt] = useState(0)
+  const { recovering, endRecovery } = useAuth()
 
   if (!isConfigured) return <SetupNotice />
+
+  // A reset link signs the visitor in, so the gate would happily show them the
+  // board with the password they had forgotten still in force. Divert first.
+  if (recovering) return <ResetPassword onDone={endRecovery} />
 
   return (
     <ToastProvider>
