@@ -32,20 +32,28 @@ export function Button({ variant = 'primary', size = 'md', className, ...rest }:
   )
 }
 
-const FIELD = 'w-full rounded-lg bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-300 ' +
+/** Tailwind resolves conflicting utilities by stylesheet order, not by the
+ *  order they appear in the class string — so a caller passing `w-28` would
+ *  lose to the base `w-full` and the control would still stretch, squeezing
+ *  whatever sits beside it. Only apply the default when no width was given. */
+function widthClass(className?: string) {
+  return /(^|\s)(w-|min-w-|max-w-|basis-|flex-1|grow)/.test(className ?? '') ? '' : 'w-full'
+}
+
+const FIELD = 'rounded-lg bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-300 ' +
   'placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:outline-none ' +
   'dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700 dark:placeholder:text-slate-500'
 
 export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...rest} className={cx(FIELD, className)} />
+  return <input {...rest} className={cx(FIELD, widthClass(className), className)} />
 }
 
 export function Textarea({ className, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea {...rest} className={cx(FIELD, 'resize-y', className)} />
+  return <textarea {...rest} className={cx(FIELD, 'resize-y', widthClass(className), className)} />
 }
 
 export function Select({ className, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select {...rest} className={cx(FIELD, 'appearance-none pr-8', className)} />
+  return <select {...rest} className={cx(FIELD, 'appearance-none pr-8', widthClass(className), className)} />
 }
 
 export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {

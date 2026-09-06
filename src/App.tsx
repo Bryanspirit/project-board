@@ -6,16 +6,16 @@ import { useWorkspaces } from './hooks/useWorkspaces'
 import type { Profile, Project, ProjectHealth, Task, TaskStatus, TeamRole } from './lib/types'
 
 import AuthGate, { useProfile } from './components/access/AuthGate'
-import Sidebar from './components/Sidebar'
-import Board from './components/Board'
 import SettingsDialog from './components/SettingsDialog'
 import TaskDialog, { emptyDraft, toDraft } from './components/TaskDialog'
 import type { TaskDraft } from './components/TaskDialog'
 import ProjectDialog, { projectDraft } from './components/ProjectDialog'
 import type { ProjectDraft } from './components/ProjectDialog'
 
-import WorkspaceSwitcher from './components/workspace/WorkspaceSwitcher'
-import TeamList from './components/workspace/TeamList'
+import WorkspacePicker from './components/shell/WorkspacePicker'
+import WorkspaceHome from './components/shell/WorkspaceHome'
+import BoardView from './components/shell/BoardView'
+
 import WorkspaceDialog, { workspaceDraft, draftToPatch } from './components/workspace/WorkspaceDialog'
 import type { WorkspaceDraft } from './components/workspace/WorkspaceDialog'
 import TeamDialog, { teamDraft, draftToTeamPatch } from './components/workspace/TeamDialog'
@@ -28,14 +28,12 @@ import JudgingPanel from './components/judging/JudgingPanel'
 import { MeetingList } from './components/collab/MeetingList'
 import { NotificationBell } from './components/collab/NotificationBell'
 
-import { Button, Input, Spinner, cx } from './components/ui'
+import { cx } from './components/ui'
 
-const LAST_PROJECT_KEY = 'board:last-project'
+/** Where you are in the drill-down: workspaces → one workspace → a board. */
+type Level = 'workspaces' | 'workspace' | 'board'
+type Tab = 'board' | 'meetings'
 
-type View = 'board' | 'meetings'
-
-/** Shown when the site was built without Supabase credentials — far more useful
- *  than a login form that can never succeed. */
 function SetupNotice() {
   return (
     <div className="flex min-h-full items-center justify-center p-6">
@@ -45,8 +43,8 @@ function SetupNotice() {
           This build has no Supabase credentials, so sign-in is disabled. Set{' '}
           <code className="rounded bg-slate-100 px-1 py-0.5 text-xs dark:bg-slate-800">VITE_SUPABASE_URL</code> and{' '}
           <code className="rounded bg-slate-100 px-1 py-0.5 text-xs dark:bg-slate-800">VITE_SUPABASE_ANON_KEY</code>{' '}
-          in <code className="rounded bg-slate-100 px-1 py-0.5 text-xs dark:bg-slate-800">.env.local</code> for local
-          development, or as repository secrets for the GitHub Pages deploy.
+          in <code className="rounded bg-slate-100 px-1 py-0.5 text-xs dark:bg-slate-800">.env.local</code>, or as
+          repository secrets for the GitHub Pages deploy.
         </p>
       </div>
     </div>
@@ -80,25 +78,19 @@ function ThemeToggle() {
   )
 }
 
-function IconButton({ label, onClick, children, badge }: {
+function IconButton({ label, onClick, children }: {
   label: string
   onClick: () => void
   children: React.ReactNode
-  badge?: number
 }) {
   return (
     <button
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="relative rounded-lg p-2 text-slate-500 transition hover:bg-slate-200 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+      className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-200 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
     >
       {children}
-      {badge !== undefined && badge > 0 && (
-        <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-semibold text-white">
-          {badge > 9 ? '9+' : badge}
-        </span>
-      )}
     </button>
   )
 }
@@ -108,13 +100,16 @@ function BoardApp() {
   const { profile } = useProfile()
   const ws = useWorkspaces(user?.id)
 
+  const [level, setLevel] = useState<Level>('workspaces')
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null)
-  const board = useBoard(user?.id, ws.activeWorkspaceId, activeTeamId)
+  const [tab, setTab] = useState<Tab>('board')
+
+  // At workspace level the team filter is deliberately dropped, so the overview
+  // can count every project in the workspace, not just one team's.
+  const board = useBoard(user?.id, ws.activeWorkspaceId, level === 'board' ? activeTeamId : null)
 
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [view, setView] = useState<View>('board')
 
   const [taskDraft, setTaskDraft] = useState<TaskDraft | null>(null)
   const [projDraft, setProjDraft] = useState<ProjectDraft | null>(null)
@@ -126,33 +121,22 @@ function BoardApp() {
   const [showJudging, setShowJudging] = useState(false)
   const [health, setHealth] = useState<ProjectHealth[]>([])
 
+  const workspace = ws.activeWorkspace
   const workspaceId = ws.activeWorkspaceId
   const isAdmin = workspaceId ? ws.isAdmin(workspaceId) : false
-  const isProgramme = ws.activeWorkspace?.kind === 'hackathon' || ws.activeWorkspace?.kind === 'program'
+  const isProgramme = workspace?.kind === 'hackathon' || workspace?.kind === 'program'
 
-  // A deep link of #admin (used by the "new request" email) opens the dashboard.
+  // The "new request" email links straight to the approval queue.
   useEffect(() => {
     if (window.location.hash === '#admin' && profile?.is_super_admin) setShowAdmin(true)
   }, [profile?.is_super_admin])
 
-  // Changing workspace invalidates the team filter — a team id never spans two.
-  useEffect(() => { setActiveTeamId(null) }, [workspaceId])
-
   useEffect(() => {
     if (board.projects.length === 0) { setActiveProjectId(null); return }
-    setActiveProjectId(current => {
-      if (current && board.projects.some(p => p.id === current)) return current
-      const remembered = localStorage.getItem(LAST_PROJECT_KEY)
-      if (remembered && board.projects.some(p => p.id === remembered)) return remembered
-      return board.projects[0].id
-    })
+    setActiveProjectId(current =>
+      current && board.projects.some(p => p.id === current) ? current : board.projects[0].id)
   }, [board.projects])
 
-  useEffect(() => {
-    if (activeProjectId) localStorage.setItem(LAST_PROJECT_KEY, activeProjectId)
-  }, [activeProjectId])
-
-  // project_health powers judging and the showcase; only fetched when needed.
   const loadHealth = useCallback(async () => {
     if (!workspaceId) return
     const { data } = await supabase.from('project_health').select('*').eq('workspace_id', workspaceId)
@@ -177,14 +161,18 @@ function BoardApp() {
       t.title.toLowerCase().includes(q) || (t.description ?? '').toLowerCase().includes(q))
   }, [active, board.byProject, query])
 
-  const stats = useMemo(() => {
-    const all = active ? board.byProject.get(active.id) ?? [] : []
-    return {
-      total: all.length,
-      done: all.filter(t => t.status === 'done').length,
-      blocked: all.filter(t => t.status === 'blocked').length,
-    }
-  }, [active, board.byProject])
+  function openWorkspace(id: string) {
+    ws.setActiveWorkspace(id)
+    setActiveTeamId(null)
+    setTab('board')
+    setLevel('workspace')
+  }
+
+  function openTeam(teamId: string | null) {
+    setActiveTeamId(teamId)
+    setTab('board')
+    setLevel('board')
+  }
 
   async function saveTask(d: TaskDraft) {
     if (!active) return
@@ -212,209 +200,185 @@ function BoardApp() {
     }
     if (d.id) await board.updateProject(d.id, payload)
     else {
-      const created = await board.createProject(payload)
+      // A project made from inside a team belongs to that team by default.
+      const created = await board.createProject({ ...payload, team_id: payload.team_id ?? activeTeamId })
       if (created) setActiveProjectId(created.id)
     }
   }
 
-  if (ws.loading && ws.workspaces.length === 0) {
-    return (
-      <div className="flex min-h-full items-center justify-center text-slate-400">
-        <Spinner className="h-6 w-6" />
-      </div>
-    )
-  }
+  const teamName = activeTeamId ? ws.teams.find(t => t.id === activeTeamId)?.name : null
 
   return (
-    <div className="flex h-full overflow-hidden">
-      <Sidebar
-        projects={board.projects}
-        byProject={board.byProject}
-        activeId={activeProjectId}
-        onSelect={setActiveProjectId}
-        onNew={() => setProjDraft(projectDraft())}
-        onEdit={p => setProjDraft(projectDraft(p))}
-        open={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-        header={
-          <div className="space-y-2 px-2.5 pt-3">
-            <WorkspaceSwitcher
-              workspaces={ws.workspaces}
-              activeWorkspace={ws.activeWorkspace}
-              onSelect={ws.setActiveWorkspace}
-              myRole={ws.myRole}
-              canCreate={ws.isSuperAdmin}
-              onNew={() => setWsDraft(workspaceDraft())}
-            />
-            <TeamList
-              teams={ws.teams}
-              teamMembers={ws.teamMembers}
-              projects={board.projects}
-              activeTeamId={activeTeamId}
-              onSelect={setActiveTeamId}
-              canCreate={isAdmin}
-              canEdit={id => isAdmin || ws.isTeamLead(id)}
-              onNew={() => setTeamDraftState(teamDraft())}
-              onEdit={t => setTeamDraftState(teamDraft(t))}
-            />
-          </div>
-        }
-      />
-
-      <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-4 py-3 sm:px-6 dark:border-slate-800">
+    <div className="flex h-full flex-col overflow-hidden">
+      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-200 px-4 py-2.5 sm:px-6 dark:border-slate-800">
+        <nav aria-label="Breadcrumb" className="flex min-w-0 flex-1 items-center gap-1 text-sm">
           <button
-            onClick={() => setSidebarOpen(true)}
-            aria-label="Open project list"
-            className="rounded-lg p-2 text-slate-500 hover:bg-slate-200 lg:hidden dark:hover:bg-slate-800"
+            onClick={() => { setLevel('workspaces'); setActiveTeamId(null) }}
+            className={cx('flex items-center gap-1.5 rounded-md px-2 py-1 transition hover:bg-slate-100 dark:hover:bg-slate-800',
+              level === 'workspaces' ? 'font-semibold' : 'text-slate-500 dark:text-slate-400')}
           >
-            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 5h14M3 10h14M3 15h14" strokeLinecap="round" />
-            </svg>
+            <span aria-hidden>🗂️</span>
+            <span className="hidden sm:inline">Workspaces</span>
           </button>
 
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-base font-semibold tracking-tight">
-              {view === 'meetings' ? 'Meetings' : active?.name ?? 'No project selected'}
-            </h1>
-            {view === 'board' && active && (
-              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                {stats.done} of {stats.total} done
-                {stats.blocked > 0 && (
-                  <span className="text-rose-600 dark:text-rose-400"> · {stats.blocked} blocked</span>
-                )}
-              </p>
-            )}
-          </div>
-
-          {view === 'board' && active && (
-            <div className="relative order-last w-full sm:order-none sm:w-48">
-              <svg viewBox="0 0 16 16" className="pointer-events-none absolute top-2.5 left-2.5 h-4 w-4 text-slate-400"
-                fill="none" stroke="currentColor" strokeWidth="1.5">
-                <circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5 14 14" strokeLinecap="round" />
-              </svg>
-              <Input value={query} onChange={e => setQuery(e.target.value)}
-                placeholder="Search tasks" aria-label="Search tasks" className="pl-8" />
-            </div>
-          )}
-
-          <div className="flex items-center gap-0.5 rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
-            {(['board', 'meetings'] as View[]).map(v => (
-              <button key={v} onClick={() => setView(v)}
-                className={cx('rounded-md px-2.5 py-1.5 text-xs font-medium capitalize transition',
-                  view === v ? 'bg-white shadow-sm dark:bg-slate-700' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200')}>
-                {v}
-              </button>
-            ))}
-          </div>
-
-          <NotificationBell onOpenTask={id => {
-            const t = board.tasks.find(x => x.id === id)
-            if (t) { setActiveProjectId(t.project_id); setView('board'); setTaskDraft(toDraft(t)) }
-          }} />
-
-          {isProgramme && (
+          {level !== 'workspaces' && workspace && (
             <>
-              <IconButton label="Demo day showcase" onClick={() => setShowShowcase(true)}>
-                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M4 4h12v9H4zM8 17h4M10 13v4" strokeLinecap="round" />
-                </svg>
-              </IconButton>
-              <IconButton label="Judging" onClick={() => setShowJudging(true)}>
-                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M10 3v14M5 7h10M6.5 7 4 12h5zM13.5 7 11 12h5z" strokeLinejoin="round" />
-                </svg>
-              </IconButton>
+              <span className="text-slate-300 dark:text-slate-600" aria-hidden>/</span>
+              <button
+                onClick={() => { setLevel('workspace'); setActiveTeamId(null) }}
+                className={cx('flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 transition hover:bg-slate-100 dark:hover:bg-slate-800',
+                  level === 'workspace' ? 'font-semibold' : 'text-slate-500 dark:text-slate-400')}
+              >
+                <span aria-hidden>{workspace.emoji}</span>
+                <span className="truncate">{workspace.name}</span>
+              </button>
             </>
           )}
 
-          {profile?.is_super_admin && (
-            <IconButton label="Admin dashboard" onClick={() => setShowAdmin(true)}>
-              <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <circle cx="10" cy="6" r="3" /><path d="M4 17a6 6 0 0 1 12 0" strokeLinecap="round" />
-              </svg>
-            </IconButton>
+          {level === 'board' && (
+            <>
+              <span className="text-slate-300 dark:text-slate-600" aria-hidden>/</span>
+              <span className="truncate rounded-md px-2 py-1 font-semibold">
+                {teamName ?? 'All boards'}
+              </span>
+            </>
           )}
+        </nav>
 
-          <ThemeToggle />
-
-          <IconButton label="Email alert settings" onClick={() => setShowSettings(true)}>
-            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <rect x="2" y="4" width="16" height="12" rx="2" />
-              <path d="m2.5 6 7.5 5 7.5-5" strokeLinecap="round" />
-            </svg>
-          </IconButton>
-
-          <button
-            onClick={() => void signOut()}
-            title={`Sign out — ${user?.email ?? ''}`}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-xs font-semibold text-white transition hover:bg-indigo-500"
-            aria-label={`Sign out ${user?.email ?? ''}`}
-          >
-            {(profile?.full_name ?? user?.email ?? '?').slice(0, 1).toUpperCase()}
-          </button>
-
-          {view === 'board' && active && (
-            <Button onClick={() => setTaskDraft(emptyDraft('todo'))}>
-              <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M8 3v10M3 8h10" strokeLinecap="round" />
-              </svg>
-              New task
-            </Button>
-          )}
-        </header>
-
-        {(board.error || ws.error) && (
-          <div role="alert" className="flex items-center gap-3 bg-rose-50 px-4 py-2 text-xs text-rose-700 sm:px-6 dark:bg-rose-950/50 dark:text-rose-300">
-            <span className="flex-1">{board.error ?? ws.error}</span>
-            <button onClick={() => { board.clearError(); ws.clearError() }} className="font-medium underline">Dismiss</button>
+        {level === 'board' && workspaceId && (
+          <div className="flex items-center gap-0.5 rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
+            {(['board', 'meetings'] as Tab[]).map(t => (
+              <button key={t} onClick={() => setTab(t)}
+                className={cx('rounded-md px-2.5 py-1.5 text-xs font-medium capitalize transition',
+                  tab === t ? 'bg-white shadow-sm dark:bg-slate-700' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200')}>
+                {t}
+              </button>
+            ))}
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto">
-          {isProgramme && workspaceId && view === 'board' && (
-            <div className="px-4 pt-4 sm:px-6">
-              <MilestoneTimeline workspaceId={workspaceId} canManage={isAdmin} />
-            </div>
-          )}
+        <NotificationBell onOpenTask={id => {
+          const t = board.tasks.find(x => x.id === id)
+          if (t) { setLevel('board'); setTab('board'); setActiveProjectId(t.project_id); setTaskDraft(toDraft(t)) }
+        }} />
 
-          {view === 'meetings' && workspaceId ? (
-            <div className="p-4 sm:p-6">
-              <MeetingList
-                workspaceId={workspaceId}
-                people={people}
-                teams={ws.teams}
-                canManage={isAdmin || (activeTeamId ? ws.isTeamLead(activeTeamId) : false)}
-              />
-            </div>
-          ) : board.loading && board.projects.length === 0 ? (
-            <div className="flex h-64 items-center justify-center text-slate-400">
-              <Spinner className="h-6 w-6" />
-            </div>
-          ) : active ? (
-            <div className="h-full pt-4">
-              <Board
-                project={active}
-                tasks={visibleTasks}
-                onOpenTask={t => setTaskDraft(toDraft(t))}
-                onAdd={(status: TaskStatus) => setTaskDraft(emptyDraft(status))}
-                onMove={board.moveTask}
-              />
-            </div>
-          ) : (
-            <div className="flex h-64 flex-col items-center justify-center gap-3 px-6 text-center">
-              <span className="text-4xl" aria-hidden>🗂️</span>
-              <h2 className="text-base font-semibold">No projects here yet</h2>
-              <p className="max-w-xs text-sm text-slate-500 dark:text-slate-400">
-                {activeTeamId
-                  ? 'This team has no projects. Create one to get them started.'
-                  : 'Create your first project and start dropping tasks into the board.'}
-              </p>
-              <Button onClick={() => setProjDraft(projectDraft())}>Create a project</Button>
-            </div>
-          )}
+        {isProgramme && level !== 'workspaces' && (
+          <>
+            <IconButton label="Demo day showcase" onClick={() => setShowShowcase(true)}>
+              <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M4 4h12v9H4zM8 17h4M10 13v4" strokeLinecap="round" />
+              </svg>
+            </IconButton>
+            <IconButton label="Judging" onClick={() => setShowJudging(true)}>
+              <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M10 3v14M5 7h10M6.5 7 4 12h5zM13.5 7 11 12h5z" strokeLinejoin="round" />
+              </svg>
+            </IconButton>
+          </>
+        )}
+
+        {profile?.is_super_admin && (
+          <IconButton label="Admin dashboard" onClick={() => setShowAdmin(true)}>
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <circle cx="10" cy="6" r="3" /><path d="M4 17a6 6 0 0 1 12 0" strokeLinecap="round" />
+            </svg>
+          </IconButton>
+        )}
+
+        <ThemeToggle />
+
+        <IconButton label="Email alert settings" onClick={() => setShowSettings(true)}>
+          <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <rect x="2" y="4" width="16" height="12" rx="2" />
+            <path d="m2.5 6 7.5 5 7.5-5" strokeLinecap="round" />
+          </svg>
+        </IconButton>
+
+        <button
+          onClick={() => void signOut()}
+          title={`Sign out — ${user?.email ?? ''}`}
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-xs font-semibold text-white transition hover:bg-indigo-500"
+          aria-label={`Sign out ${user?.email ?? ''}`}
+        >
+          {(profile?.full_name ?? user?.email ?? '?').slice(0, 1).toUpperCase()}
+        </button>
+      </header>
+
+      {(board.error || ws.error) && (
+        <div role="alert" className="flex shrink-0 items-center gap-3 bg-rose-50 px-4 py-2 text-xs text-rose-700 sm:px-6 dark:bg-rose-950/50 dark:text-rose-300">
+          <span className="flex-1">{board.error ?? ws.error}</span>
+          <button onClick={() => { board.clearError(); ws.clearError() }} className="font-medium underline">Dismiss</button>
         </div>
-      </main>
+      )}
+
+      <div className={cx('min-h-0 flex-1', level === 'board' && tab === 'board' ? 'overflow-hidden' : 'overflow-y-auto')}>
+        {level === 'workspaces' && (
+          <WorkspacePicker
+            workspaces={ws.workspaces}
+            myRole={ws.myRole}
+            canCreate={ws.isSuperAdmin}
+            loading={ws.loading}
+            onOpen={openWorkspace}
+            onNew={() => setWsDraft(workspaceDraft())}
+            onJoined={() => void ws.refresh()}
+          />
+        )}
+
+        {level === 'workspace' && workspace && (
+          <>
+            {isProgramme && workspaceId && (
+              <div className="mx-auto w-full max-w-6xl px-5 pt-6 sm:px-8">
+                <MilestoneTimeline workspaceId={workspaceId} canManage={isAdmin} />
+              </div>
+            )}
+            <WorkspaceHome
+              workspace={workspace}
+              role={ws.myRole(workspace.id)}
+              isAdmin={isAdmin}
+              isTeamLead={ws.isTeamLead}
+              teams={ws.teams}
+              membersByTeam={ws.membersByTeam}
+              workspaceMembers={ws.workspaceMembers}
+              projects={board.projects}
+              tasksByProject={board.byProject}
+              onOpenTeam={openTeam}
+              onNewTeam={() => setTeamDraftState(teamDraft())}
+              onEditTeam={t => setTeamDraftState(teamDraft(t))}
+              onManageMembers={() => setShowAdmin(true)}
+              onEditWorkspace={() => setWsDraft(workspaceDraft(workspace))}
+            />
+          </>
+        )}
+
+        {level === 'board' && tab === 'board' && (
+          <BoardView
+            projects={board.projects}
+            byProject={board.byProject}
+            activeProjectId={activeProjectId}
+            onSelectProject={setActiveProjectId}
+            onNewProject={() => setProjDraft(projectDraft())}
+            onEditProject={p => setProjDraft(projectDraft(p))}
+            tasks={visibleTasks}
+            query={query}
+            onQuery={setQuery}
+            loading={board.loading}
+            onOpenTask={t => setTaskDraft(toDraft(t))}
+            onAddTask={(status: TaskStatus) => setTaskDraft(emptyDraft(status))}
+            onMoveTask={board.moveTask}
+          />
+        )}
+
+        {level === 'board' && tab === 'meetings' && workspaceId && (
+          <div className="mx-auto w-full max-w-5xl p-4 sm:p-6">
+            <MeetingList
+              workspaceId={workspaceId}
+              people={people}
+              teams={ws.teams}
+              canManage={isAdmin || (activeTeamId ? ws.isTeamLead(activeTeamId) : false)}
+            />
+          </div>
+        )}
+      </div>
 
       {taskDraft && (
         <TaskDialog
@@ -444,7 +408,10 @@ function BoardApp() {
           onSave={async d => {
             const patch = draftToPatch(d)
             if (d.id) await ws.updateWorkspace(d.id, patch)
-            else await ws.createWorkspace(patch)
+            else {
+              const created = await ws.createWorkspace(patch)
+              if (created) openWorkspace(created.id)
+            }
           }}
           onArchive={id => ws.archiveWorkspace(id)}
           onRegenerateCode={id => ws.regenerateJoinCode(id)}
