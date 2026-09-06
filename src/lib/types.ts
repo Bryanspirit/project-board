@@ -105,6 +105,7 @@ export interface Project {
   video_url: string | null
   doc_url: string | null
   submitted_at: string | null
+  deleted_at: string | null
   created_at: string
   updated_at: string
 }
@@ -125,6 +126,7 @@ export interface Task {
   blocked_at: string | null
   blocked_notified_at: string | null
   completed_at: string | null
+  deleted_at: string | null
   created_at: string
   updated_at: string
 }
@@ -217,25 +219,29 @@ export interface MeetingAttendee {
   profile?: Profile
 }
 
-export interface JudgingCriterion {
+export interface InviteLink {
   id: string
   workspace_id: string
-  name: string
-  description: string | null
-  max_score: number
-  weight: number
-  sort_order: number
+  team_id: string | null
+  token: string
+  role: WorkspaceRole
+  label: string | null
+  expires_at: string | null
+  max_uses: number | null
+  uses: number
+  revoked: boolean
+  created_by: string | null
+  created_at: string
 }
 
-export interface Score {
+/** One row per live task, flattened to the two dates burndown needs. */
+export interface TaskActivity {
   id: string
   project_id: string
-  criterion_id: string
-  judge_id: string
-  score: number
-  notes: string | null
-  created_at: string
-  updated_at: string
+  workspace_id: string
+  team_id: string | null
+  created_on: string
+  completed_on: string | null
 }
 
 export interface AuditEntry {
@@ -293,11 +299,13 @@ export const PROJECT_COLORS = [
   '#ef4444', '#ec4899', '#8b5cf6', '#14b8a6',
 ]
 
+/** Selectable roles. 'judge' is deliberately absent — judging was removed, and
+ *  the enum member only survives in Postgres because dropping it would mean
+ *  rebuilding every policy that depends on the type. */
 export const WORKSPACE_ROLES: { id: WorkspaceRole; label: string; blurb: string }[] = [
   { id: 'owner',   label: 'Owner',   blurb: 'Full control of the workspace' },
   { id: 'admin',   label: 'Admin',   blurb: 'Manage teams, members and every project' },
   { id: 'manager', label: 'Manager', blurb: 'Run projects across teams they belong to' },
-  { id: 'judge',   label: 'Judge',   blurb: 'Read every project and submit scores' },
   { id: 'member',  label: 'Member',  blurb: 'Work on their own team’s boards' },
 ]
 

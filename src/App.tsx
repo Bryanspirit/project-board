@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from './lib/auth'
-import { isConfigured, supabase } from './lib/supabase'
+import { isConfigured } from './lib/supabase'
 import { useBoard } from './hooks/useBoard'
 import { useWorkspaces } from './hooks/useWorkspaces'
-import type { Profile, Project, ProjectHealth, Task, TaskStatus, TeamRole } from './lib/types'
+import type { Profile, Project, Task, TaskStatus, TeamRole } from './lib/types'
 
 import AuthGate, { useProfile } from './components/access/AuthGate'
 import SettingsDialog from './components/SettingsDialog'
@@ -24,7 +24,6 @@ import type { TeamDraft } from './components/workspace/TeamDialog'
 import AdminDashboard from './components/admin/AdminDashboard'
 import { MilestoneTimeline } from './components/program/MilestoneTimeline'
 import { ShowcasePage } from './components/program/ShowcasePage'
-import JudgingPanel from './components/judging/JudgingPanel'
 import { MeetingList } from './components/collab/MeetingList'
 import { NotificationBell } from './components/collab/NotificationBell'
 
@@ -118,8 +117,6 @@ function BoardApp() {
   const [showSettings, setShowSettings] = useState(false)
   const [showAdmin, setShowAdmin] = useState(false)
   const [showShowcase, setShowShowcase] = useState(false)
-  const [showJudging, setShowJudging] = useState(false)
-  const [health, setHealth] = useState<ProjectHealth[]>([])
 
   const workspace = ws.activeWorkspace
   const workspaceId = ws.activeWorkspaceId
@@ -136,14 +133,6 @@ function BoardApp() {
     setActiveProjectId(current =>
       current && board.projects.some(p => p.id === current) ? current : board.projects[0].id)
   }, [board.projects])
-
-  const loadHealth = useCallback(async () => {
-    if (!workspaceId) return
-    const { data } = await supabase.from('project_health').select('*').eq('workspace_id', workspaceId)
-    if (data) setHealth(data as ProjectHealth[])
-  }, [workspaceId])
-
-  useEffect(() => { if (showJudging) void loadHealth() }, [showJudging, loadHealth])
 
   const active = board.projects.find(p => p.id === activeProjectId) ?? null
 
@@ -263,18 +252,11 @@ function BoardApp() {
         }} />
 
         {isProgramme && level !== 'workspaces' && (
-          <>
-            <IconButton label="Demo day showcase" onClick={() => setShowShowcase(true)}>
-              <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M4 4h12v9H4zM8 17h4M10 13v4" strokeLinecap="round" />
-              </svg>
-            </IconButton>
-            <IconButton label="Judging" onClick={() => setShowJudging(true)}>
-              <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M10 3v14M5 7h10M6.5 7 4 12h5zM13.5 7 11 12h5z" strokeLinejoin="round" />
-              </svg>
-            </IconButton>
-          </>
+          <IconButton label="Demo day showcase" onClick={() => setShowShowcase(true)}>
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M4 4h12v9H4zM8 17h4M10 13v4" strokeLinecap="round" />
+            </svg>
+          </IconButton>
         )}
 
         {profile?.is_super_admin && (
@@ -449,14 +431,6 @@ function BoardApp() {
         <ShowcasePage workspaceId={workspaceId} onClose={() => setShowShowcase(false)} />
       )}
 
-      {showJudging && workspaceId && (
-        <JudgingPanel
-          workspaceId={workspaceId}
-          projects={health}
-          canManage={isAdmin}
-          onClose={() => setShowJudging(false)}
-        />
-      )}
     </div>
   )
 }
