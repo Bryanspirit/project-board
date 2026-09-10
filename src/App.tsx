@@ -42,6 +42,11 @@ import AnalyticsPanel from './components/analytics/AnalyticsPanel'
 import InstallPrompt, { UpdateToast } from './pwa/InstallPrompt'
 import OfflineBanner from './pwa/OfflineBanner'
 
+import { useIsMobile } from './hooks/useIsMobile'
+import MobileShell from './components/mobile/MobileShell'
+import type { MobileTab } from './components/mobile/MobileShell'
+import MobileBoard from './components/mobile/MobileBoard'
+
 import { cx } from './components/ui'
 
 /** Where you are in the drill-down: workspaces → one workspace → a board. */
@@ -146,6 +151,9 @@ function BoardApp() {
   const [showTrash, setShowTrash] = useState(false)
   const [showMyTasks, setShowMyTasks] = useState(false)
   const [showAnalytics, setShowAnalytics] = useState(false)
+
+  const isMobile = useIsMobile()
+  const [mobileTab, setMobileTab] = useState<MobileTab>('boards')
 
   const workspace = ws.activeWorkspace
   const workspaceId = ws.activeWorkspaceId
@@ -254,6 +262,259 @@ function BoardApp() {
   }
 
   const teamName = activeTeamId ? ws.teams.find(t => t.id === activeTeamId)?.name : null
+
+  // Rendered by both shells, so a dialog opened on a phone is the same
+  // component — and the same state — as on a desktop.
+  const dialogs = (
+    <>
+    {taskDraft && (
+      <TaskDialog
+        draft={taskDraft}
+        people={people}
+        onSave={saveTask}
+        onDelete={id => void removeTask(id)}
+        onClose={() => setTaskDraft(null)}
+      />
+    )}
+
+    {projDraft && (
+      <ProjectDialog
+        draft={projDraft}
+        teams={ws.teams}
+        project={projDraft.id ? board.projects.find(p => p.id === projDraft.id) ?? null : null}
+        onSave={saveProject}
+        onDelete={id => void removeProject(id)}
+        onSaveSubmission={patch => board.updateProject(projDraft.id!, patch)}
+        onClose={() => setProjDraft(null)}
+      />
+    )}
+
+    {wsDraft && (
+      <WorkspaceDialog
+        draft={wsDraft}
+        teams={ws.teams}
+        canManage={isAdmin || ws.isSuperAdmin}
+        onSave={async d => {
+          const patch = draftToPatch(d)
+          if (d.id) await ws.updateWorkspace(d.id, patch)
+          else {
+            const created = await ws.createWorkspace(patch)
+            if (created) openWorkspace(created.id)
+          }
+        }}
+        onArchive={id => ws.archiveWorkspace(id)}
+        onRegenerateCode={id => ws.regenerateJoinCode(id)}
+        onClose={() => setWsDraft(null)}
+      />
+    )}
+
+    {teamDraftState && workspaceId && (
+      <TeamDialog
+        draft={teamDraftState}
+        members={teamDraftState.id ? ws.membersByTeam.get(teamDraftState.id) ?? [] : []}
+        workspaceMembers={ws.workspaceMembers}
+        canManageMembers={isAdmin || (teamDraftState.id ? ws.isTeamLead(teamDraftState.id) : false)}
+        onSave={async d => {
+          const patch = draftToTeamPatch(d)
+          if (d.id) await ws.updateTeam(d.id, patch)
+          else await ws.createTeam({ ...patch, workspace_id: workspaceId })
+        }}
+        onDelete={id => ws.deleteTeam(id)}
+        onAddMember={(userId, role) =>
+          teamDraftState.id ? ws.addTeamMember(teamDraftState.id, userId, role) : undefined}
+        onRemoveMember={(id: string) => ws.removeTeamMember(id)}
+        onChangeMemberRole={(id: string, role: TeamRole) => ws.updateTeamMember(id, role)}
+        onClose={() => setTeamDraftState(null)}
+      />
+    )}
+
+    {showSettings && user && (
+      <SettingsDialog userId={user.id} email={user.email ?? ''} onClose={() => setShowSettings(false)} />
+    )}
+
+    {showAdmin && <AdminDashboard onClose={() => { setShowAdmin(false); void ws.refresh() }} />}
+
+    {showShowcase && workspaceId && (
+      <ShowcasePage workspaceId={workspaceId} onClose={() => setShowShowcase(false)} />
+    )}
+
+    {showAnalytics && workspaceId && (
+      <AnalyticsPanel
+        workspaceId={workspaceId}
+        teamId={activeTeamId}
+        canManage={isAdmin}
+        onClose={() => setShowAnalytics(false)}
+      />
+    )}
+
+    {showTrash && workspaceId && (
+      <TrashPanel
+        workspaceId={workspaceId}
+        canPurge={profile?.is_super_admin === true}
+        onClose={() => setShowTrash(false)}
+        onRestored={() => void board.reload()}
+      />
+    )}
+
+    {showMyTasks && (
+      <MyTasks
+        onClose={() => setShowMyTasks(false)}
+        onOpenTask={(taskId, projectId) => revealTask(taskId, projectId)}
+      />
+    )}
+
+    <InstallPrompt />
+    <UpdateToast />
+    </>
+  )
+
+  if (isMobile) {
+    const backTo =
+      level === 'board' ? () => setLevel('workspace')
+        : level === 'workspace' ? () => { setLevel('workspaces'); setActiveTeamId(null) }
+          : undefined
+
+    const moreRows = [
+      ...(workspaceId ? [
+        { label: 'Meetings', hint: 'Schedule and RSVP', onSelect: () => { setLevel('board'); setTab('meetings'); setMobileTab('boards') } },
+        { label: 'Timeline', hint: 'Projects against milestones', onSelect: () => { setLevel('board'); setTab('timeline'); setMobileTab('boards') } },
+        { label: 'Progress', hint: 'Burndown and velocity', onSelect: () => setShowAnalytics(true) },
+        { label: 'Trash', hint: 'Restore anything deleted', onSelect: () => setShowTrash(true) },
+      ] : []),
+      ...(isProgramme && workspaceId
+        ? [{ label: 'Showcase', hint: 'Demo day submissions', onSelect: () => setShowShowcase(true) }] : []),
+      ...(profile?.is_super_admin
+        ? [{ label: 'Admin', hint: 'Approvals and members', onSelect: () => setShowAdmin(true) }] : []),
+      { label: 'Email alerts', hint: 'Choose what reaches your inbox', onSelect: () => setShowSettings(true) },
+      {
+        label: 'Switch theme',
+        onSelect: () => {
+          const dark = document.documentElement.classList.toggle('dark')
+          localStorage.setItem('theme', dark ? 'dark' : 'light')
+        },
+      },
+      { label: 'Sign out', hint: user?.email ?? undefined, danger: true, onSelect: () => void signOut() },
+    ]
+
+    const title = level === 'board'
+      ? (teamName ?? 'All boards')
+      : level === 'workspace' ? (workspace?.name ?? 'Workspace') : 'Workspaces'
+
+    const subtitle = level === 'board'
+      ? workspace?.name
+      : level === 'workspace' ? ws.teams.length + ' teams' : 'Pick one to start'
+
+    return (
+      <>
+        <OfflineBanner />
+        <MobileShell
+          title={title}
+          subtitle={subtitle}
+          onBack={backTo}
+          tab={mobileTab}
+          onTabChange={t => {
+            // My tasks is an overlay rather than a destination, so selecting it
+            // must not leave the bar highlighting a tab with nothing behind it.
+            if (t === 'mine') { setShowMyTasks(true); return }
+            setMobileTab(t)
+          }}
+          bell={
+            <NotificationBell onOpenTask={id => {
+              const t = board.tasks.find(x => x.id === id)
+              if (t) { setMobileTab('boards'); revealTask(t.id, t.project_id) }
+            }} />
+          }
+          more={moreRows}
+        >
+          {mobileTab === 'calendar' ? (
+            workspaceId ? (
+              <div className="h-full overflow-y-auto p-3">
+                <CalendarView
+                  workspaceId={workspaceId}
+                  teamId={activeTeamId}
+                  people={people}
+                  onOpenTask={t => setTaskDraft(toDraft(t))}
+                />
+              </div>
+            ) : (
+              <p className="p-6 text-center text-sm text-slate-500 dark:text-slate-400">
+                Open a workspace to see its calendar.
+              </p>
+            )
+          ) : level === 'workspaces' ? (
+            <div className="h-full overflow-y-auto">
+              <WorkspacePicker
+                workspaces={ws.workspaces}
+                myRole={ws.myRole}
+                canCreate={ws.isSuperAdmin}
+                loading={ws.loading}
+                onOpen={openWorkspace}
+                onNew={() => setWsDraft(workspaceDraft())}
+                onJoined={() => void ws.refresh()}
+              />
+            </div>
+          ) : level === 'workspace' && workspace ? (
+            <div className="h-full overflow-y-auto">
+              {isProgramme && workspaceId && (
+                <div className="px-4 pt-4">
+                  <MilestoneTimeline workspaceId={workspaceId} canManage={isAdmin} />
+                </div>
+              )}
+              <WorkspaceHome
+                workspace={workspace}
+                role={ws.myRole(workspace.id)}
+                isAdmin={isAdmin}
+                isTeamLead={ws.isTeamLead}
+                teams={ws.teams}
+                membersByTeam={ws.membersByTeam}
+                workspaceMembers={ws.workspaceMembers}
+                projects={board.projects}
+                tasksByProject={board.byProject}
+                onOpenTeam={openTeam}
+                onNewTeam={() => setTeamDraftState(teamDraft())}
+                onEditTeam={t => setTeamDraftState(teamDraft(t))}
+                onManageMembers={() => setShowAdmin(true)}
+                onEditWorkspace={() => setWsDraft(workspaceDraft(workspace))}
+              />
+            </div>
+          ) : tab === 'meetings' && workspaceId ? (
+            <div className="h-full overflow-y-auto p-3">
+              <MeetingList
+                workspaceId={workspaceId}
+                people={people}
+                teams={ws.teams}
+                canManage={isAdmin || (activeTeamId ? ws.isTeamLead(activeTeamId) : false)}
+              />
+            </div>
+          ) : tab === 'timeline' && workspaceId ? (
+            <div className="h-full overflow-y-auto p-3">
+              <TimelineView
+                workspaceId={workspaceId}
+                teamId={activeTeamId}
+                onOpenProject={p => setProjDraft(projectDraft(p))}
+              />
+            </div>
+          ) : (
+            <MobileBoard
+              projects={board.projects}
+              activeProjectId={activeProjectId}
+              onSelectProject={setActiveProjectId}
+              tasks={visibleTasks}
+              loading={board.loading}
+              people={people}
+              onOpenTask={t => setTaskDraft(toDraft(t))}
+              onAddTask={(status: TaskStatus) => setTaskDraft(emptyDraft(status))}
+              onMoveTask={board.moveTask}
+              onNewProject={() => setProjDraft(projectDraft())}
+            />
+          )}
+        </MobileShell>
+
+        {dialogs}
+      </>
+    )
+  }
+
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -473,104 +734,6 @@ function BoardApp() {
         )}
       </div>
 
-      {taskDraft && (
-        <TaskDialog
-          draft={taskDraft}
-          people={people}
-          onSave={saveTask}
-          onDelete={id => void removeTask(id)}
-          onClose={() => setTaskDraft(null)}
-        />
-      )}
-
-      {projDraft && (
-        <ProjectDialog
-          draft={projDraft}
-          teams={ws.teams}
-          project={projDraft.id ? board.projects.find(p => p.id === projDraft.id) ?? null : null}
-          onSave={saveProject}
-          onDelete={id => void removeProject(id)}
-          onSaveSubmission={patch => board.updateProject(projDraft.id!, patch)}
-          onClose={() => setProjDraft(null)}
-        />
-      )}
-
-      {wsDraft && (
-        <WorkspaceDialog
-          draft={wsDraft}
-          teams={ws.teams}
-          canManage={isAdmin || ws.isSuperAdmin}
-          onSave={async d => {
-            const patch = draftToPatch(d)
-            if (d.id) await ws.updateWorkspace(d.id, patch)
-            else {
-              const created = await ws.createWorkspace(patch)
-              if (created) openWorkspace(created.id)
-            }
-          }}
-          onArchive={id => ws.archiveWorkspace(id)}
-          onRegenerateCode={id => ws.regenerateJoinCode(id)}
-          onClose={() => setWsDraft(null)}
-        />
-      )}
-
-      {teamDraftState && workspaceId && (
-        <TeamDialog
-          draft={teamDraftState}
-          members={teamDraftState.id ? ws.membersByTeam.get(teamDraftState.id) ?? [] : []}
-          workspaceMembers={ws.workspaceMembers}
-          canManageMembers={isAdmin || (teamDraftState.id ? ws.isTeamLead(teamDraftState.id) : false)}
-          onSave={async d => {
-            const patch = draftToTeamPatch(d)
-            if (d.id) await ws.updateTeam(d.id, patch)
-            else await ws.createTeam({ ...patch, workspace_id: workspaceId })
-          }}
-          onDelete={id => ws.deleteTeam(id)}
-          onAddMember={(userId, role) =>
-            teamDraftState.id ? ws.addTeamMember(teamDraftState.id, userId, role) : undefined}
-          onRemoveMember={(id: string) => ws.removeTeamMember(id)}
-          onChangeMemberRole={(id: string, role: TeamRole) => ws.updateTeamMember(id, role)}
-          onClose={() => setTeamDraftState(null)}
-        />
-      )}
-
-      {showSettings && user && (
-        <SettingsDialog userId={user.id} email={user.email ?? ''} onClose={() => setShowSettings(false)} />
-      )}
-
-      {showAdmin && <AdminDashboard onClose={() => { setShowAdmin(false); void ws.refresh() }} />}
-
-      {showShowcase && workspaceId && (
-        <ShowcasePage workspaceId={workspaceId} onClose={() => setShowShowcase(false)} />
-      )}
-
-      {showAnalytics && workspaceId && (
-        <AnalyticsPanel
-          workspaceId={workspaceId}
-          teamId={activeTeamId}
-          canManage={isAdmin}
-          onClose={() => setShowAnalytics(false)}
-        />
-      )}
-
-      {showTrash && workspaceId && (
-        <TrashPanel
-          workspaceId={workspaceId}
-          canPurge={profile?.is_super_admin === true}
-          onClose={() => setShowTrash(false)}
-          onRestored={() => void board.reload()}
-        />
-      )}
-
-      {showMyTasks && (
-        <MyTasks
-          onClose={() => setShowMyTasks(false)}
-          onOpenTask={(taskId, projectId) => revealTask(taskId, projectId)}
-        />
-      )}
-
-      <InstallPrompt />
-      <UpdateToast />
     </div>
   )
 }

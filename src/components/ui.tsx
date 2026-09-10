@@ -83,26 +83,48 @@ export function Modal({ title, onClose, children, footer }: {
   }, [onClose])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 backdrop-blur-sm sm:p-8">
+    // Bottom sheet on a phone, centred dialog from `sm` up. Doing it in CSS
+    // rather than behind a media-query hook means there is no first-paint flash
+    // of the wrong shape, and it works with the keyboard open on iOS.
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 backdrop-blur-sm sm:items-start sm:overflow-y-auto sm:p-8">
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="my-auto w-full max-w-lg rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800"
+        className={cx(
+          'flex w-full flex-col bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800',
+          // Phone: anchored to the bottom edge, never taller than the viewport,
+          // and clear of the home indicator.
+          'max-h-[92dvh] rounded-t-2xl pb-[env(safe-area-inset-bottom)]',
+          // Desktop: the familiar centred card.
+          'sm:my-auto sm:max-h-none sm:max-w-lg sm:rounded-2xl sm:pb-0',
+        )}
         onClick={e => e.stopPropagation()}
       >
-        <header className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+        {/* Grab handle reads as "this drags down" even though the close button
+            is what actually dismisses it. Hidden from assistive tech. */}
+        <div className="flex justify-center pt-2 sm:hidden" aria-hidden>
+          <span className="h-1 w-9 rounded-full bg-slate-300 dark:bg-slate-700" />
+        </div>
+
+        <header className="flex shrink-0 items-center justify-between border-b border-slate-200 px-5 py-3.5 sm:py-4 dark:border-slate-800">
           <h2 className="text-base font-semibold">{title}</h2>
           <button onClick={onClose} aria-label="Close"
-            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200">
+            className="-mr-1.5 rounded-lg p-2.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 sm:p-1.5 dark:hover:bg-slate-800 dark:hover:text-slate-200">
             <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
             </svg>
           </button>
         </header>
-        <div className="space-y-4 px-5 py-5">{children}</div>
+
+        {/* Only the body scrolls, so the title and the actions stay reachable
+            however long the form gets. */}
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 py-5">
+          {children}
+        </div>
+
         {footer && (
-          <footer className="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-4 dark:border-slate-800">
+          <footer className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-slate-200 px-5 py-3.5 sm:py-4 dark:border-slate-800">
             {footer}
           </footer>
         )}
