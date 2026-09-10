@@ -88,7 +88,7 @@ export default function ProjectDialog({
           placeholder="What is this project for?" />
       </Field>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Status">
           <Select value={form.status} onChange={e => set('status', e.target.value as ProjectStatus)}>
             {STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}

@@ -131,7 +131,7 @@ export default function TeamDialog({
           placeholder="What does this team own?" />
       </Field>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Emoji">
           <Input value={form.emoji} maxLength={4} onChange={e => set('emoji', e.target.value)}
             placeholder="🚀" className="text-center text-lg" />

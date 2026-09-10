@@ -40,20 +40,48 @@ function widthClass(className?: string) {
   return /(^|\s)(w-|min-w-|max-w-|basis-|flex-1|grow)/.test(className ?? '') ? '' : 'w-full'
 }
 
-const FIELD = 'rounded-lg bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-300 ' +
+// text-base is 16px, which is the threshold below which iOS Safari zooms the
+// page on focus — leaving the viewer to pinch and pan back out by hand. Phones
+// therefore get 16px and everything from `sm` up keeps the tighter 14px.
+
+/**
+ * Brings a focused field above the on-screen keyboard.
+ *
+ * Even with the viewport resizing, a field near the bottom of a tall sheet can
+ * end up behind the keyboard, and the viewer is left dragging the sheet around
+ * with a thumb to see what they are typing. The delay lets the keyboard finish
+ * animating first, or the browser measures against the old viewport and scrolls
+ * to the wrong place.
+ *
+ * Any caller-supplied onFocus still runs — MentionInput reaches for the node
+ * through exactly this event.
+ */
+function withFocusScroll<E extends HTMLElement>(
+  onFocus?: (e: React.FocusEvent<E>) => void,
+) {
+  return (e: React.FocusEvent<E>) => {
+    onFocus?.(e)
+    const el = e.currentTarget
+    window.setTimeout(() => {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }, 250)
+  }
+}
+
+const FIELD = 'rounded-lg bg-white px-3 py-2.5 text-base sm:py-2 sm:text-sm text-slate-900 ring-1 ring-slate-300 ' +
   'placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:outline-none ' +
   'dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700 dark:placeholder:text-slate-500'
 
-export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...rest} className={cx(FIELD, widthClass(className), className)} />
+export function Input({ className, onFocus, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
+  return <input {...rest} onFocus={withFocusScroll(onFocus)} className={cx(FIELD, widthClass(className), className)} />
 }
 
-export function Textarea({ className, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea {...rest} className={cx(FIELD, 'resize-y', widthClass(className), className)} />
+export function Textarea({ className, onFocus, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return <textarea {...rest} onFocus={withFocusScroll(onFocus)} className={cx(FIELD, 'resize-y', widthClass(className), className)} />
 }
 
-export function Select({ className, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select {...rest} className={cx(FIELD, 'appearance-none pr-8', widthClass(className), className)} />
+export function Select({ className, onFocus, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
+  return <select {...rest} onFocus={withFocusScroll(onFocus)} className={cx(FIELD, 'appearance-none pr-8', widthClass(className), className)} />
 }
 
 export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {

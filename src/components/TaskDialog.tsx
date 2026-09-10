@@ -127,7 +127,7 @@ export default function TaskDialog({ draft, people = [], onSave, onDelete, onClo
               placeholder="Context, links, next steps…" />
           </Field>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Column">
               <Select value={form.status} onChange={e => set('status', e.target.value as TaskStatus)}>
                 {COLUMNS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
@@ -140,7 +140,7 @@ export default function TaskDialog({ draft, people = [], onSave, onDelete, onClo
             </Field>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Due date" hint="Drives the daily digest.">
               <Input type="date" value={form.due_date} onChange={e => set('due_date', e.target.value)} />
             </Field>

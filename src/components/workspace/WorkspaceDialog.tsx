@@ -155,7 +155,7 @@ export default function WorkspaceDialog({
           placeholder="What is this workspace for?" />
       </Field>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Kind" hint={KINDS.find(k => k.id === form.kind)?.blurb}>
           <Select value={form.kind} onChange={e => set('kind', e.target.value as WorkspaceKind)}>
             {KINDS.map(k => <option key={k.id} value={k.id}>{k.label}</option>)}
@@ -167,7 +167,7 @@ export default function WorkspaceDialog({
         </Field>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Starts">
           <Input type="datetime-local" value={form.starts_at}
             onChange={e => set('starts_at', e.target.value)} />
