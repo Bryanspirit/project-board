@@ -5,22 +5,19 @@ import type { MemberStatus, Profile } from '../../lib/types'
 import { Button } from '../ui'
 import JoinCodeCard from './JoinCodeCard'
 
-const COPY: Record<Exclude<MemberStatus, 'active'>, { emoji: string; title: string; body: string; tone: string }> = {
+const COPY: Record<Exclude<MemberStatus, 'active'>, { title: string; body: string; tone: string }> = {
   pending: {
-    emoji: '⏳',
     title: 'We’re reviewing your request',
     body: 'Your account exists, it just isn’t switched on yet. An administrator looks at every request by hand and picks the workspace you belong in. This page unlocks itself the moment that happens — no need to refresh.',
     tone: 'bg-amber-100 dark:bg-amber-950',
   },
   rejected: {
-    emoji: '🚫',
-    title: 'Your request wasn’t approved',
+        title: 'Your request wasn’t approved',
     body: 'An administrator reviewed your request and decided not to grant access this time. If you were given a join code by an organiser, you can still use it below.',
     tone: 'bg-rose-100 dark:bg-rose-950',
   },
   suspended: {
-    emoji: '🔒',
-    title: 'Your account is suspended',
+        title: 'Your account is suspended',
     body: 'Access to this workspace has been paused. Contact the administrator who invited you to have it restored — a join code will not lift a suspension.',
     tone: 'bg-slate-200 dark:bg-slate-800',
   },
@@ -74,7 +71,6 @@ export default function PendingApproval({ profile, onActivated }: {
       <div className="w-full max-w-md space-y-4">
         <div className="rounded-2xl bg-white p-6 text-center shadow-xl shadow-slate-200/60 ring-1 ring-slate-200 dark:bg-slate-900 dark:shadow-none dark:ring-slate-800">
           <div className={`mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl text-2xl ${copy.tone}`}>
-            {copy.emoji}
           </div>
           <h1 className="text-lg font-semibold tracking-tight">{copy.title}</h1>
           <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{copy.body}</p>

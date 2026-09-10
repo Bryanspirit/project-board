@@ -44,7 +44,7 @@ export default function OfflineBanner() {
     <div role="status" aria-live="polite">
       {!isOnline && (
         <div className={cx(BAR, TONE)}>
-          <span aria-hidden="true" className="mr-1.5">⚠︎</span>
+          <span aria-hidden="true" className="mr-1.5">︎</span>
           You are offline — changes will not save until the connection returns.
         </div>
       )}

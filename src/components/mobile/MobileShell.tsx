@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { Modal, cx } from '../ui'
+import { BrandMark } from '../Mark'
 
 export type MobileTab = 'boards' | 'calendar' | 'mine' | 'more'
 
@@ -79,7 +80,9 @@ export default function MobileShell({
             </svg>
           </button>
         ) : (
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center text-xl" aria-hidden>🗂️</span>
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center text-indigo-600 dark:text-indigo-400">
+            <BrandMark />
+          </span>
         )}
 
         <div className="min-w-0 flex-1 px-1">

@@ -130,7 +130,7 @@ function PendingCard({ request, workspaces, teams, onApprove, onReject }: {
             <Field label="Workspace">
               <Select value={workspaceId} onChange={e => chooseWorkspace(e.target.value)}>
                 <option value="">No workspace (activate only)</option>
-                {workspaces.map(w => <option key={w.id} value={w.id}>{w.emoji} {w.name}</option>)}
+                {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
               </Select>
             </Field>
             <Field label="Role">
@@ -141,7 +141,7 @@ function PendingCard({ request, workspaces, teams, onApprove, onReject }: {
             <Field label="Team (optional)" hint={workspaceId ? undefined : 'Pick a workspace first'}>
               <Select value={teamId} onChange={e => setTeamId(e.target.value)} disabled={!workspaceId || wsTeams.length === 0}>
                 <option value="">No team</option>
-                {wsTeams.map(t => <option key={t.id} value={t.id}>{t.emoji} {t.name}</option>)}
+                {wsTeams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </Select>
             </Field>
             <Field label="Note (optional)">

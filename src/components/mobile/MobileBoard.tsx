@@ -102,7 +102,6 @@ export default function MobileBoard({
   if (projects.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
-        <span className="text-4xl" aria-hidden>🗂️</span>
         <h2 className="text-base font-semibold">No projects here yet</h2>
         <p className="text-sm text-slate-500 dark:text-slate-400">Create one to start adding tasks.</p>
         <Button onClick={onNewProject} className="min-h-11">Create a project</Button>

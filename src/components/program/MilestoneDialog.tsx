@@ -123,7 +123,7 @@ export function MilestoneDialog({ milestone, onClose, onSave, onDelete }: Milest
         <Field label="Kind">
           <Select value={kind} onChange={e => setKind(e.target.value as MilestoneKind)}>
             {MILESTONE_KINDS.map(k => (
-              <option key={k.id} value={k.id}>{k.emoji}  {k.label}</option>
+              <option key={k.id} value={k.id}>{k.label}</option>
             ))}
           </Select>
         </Field>

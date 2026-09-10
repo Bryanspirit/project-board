@@ -172,7 +172,7 @@ export function MeetingDialog({
         <Field label="Team" hint="Optional — narrows who this is for.">
           <Select value={teamId} onChange={e => setTeamId(e.target.value)}>
             <option value="">Whole workspace</option>
-            {teams.map(t => <option key={t.id} value={t.id}>{t.emoji} {t.name}</option>)}
+            {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </Select>
         </Field>
       </div>

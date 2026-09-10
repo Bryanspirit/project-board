@@ -105,7 +105,7 @@ export default function HealthTable({ health, workspaces }: Props) {
           <span className="shrink-0">Workspace</span>
           <Select value={workspaceId} onChange={e => setWorkspaceId(e.target.value)} className="w-56 py-1.5 text-xs">
             <option value="">All workspaces</option>
-            {workspaces.map(w => <option key={w.id} value={w.id}>{w.emoji} {w.name}</option>)}
+            {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
           </Select>
         </label>
         <p className="text-xs text-slate-500 dark:text-slate-400">

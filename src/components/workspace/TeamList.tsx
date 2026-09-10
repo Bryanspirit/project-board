@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { Team, TeamMember } from '../../lib/types'
 import { cx } from '../ui'
+import { Mark } from '../Mark'
 
 /**
  * Sits under the workspace switcher in the sidebar. Selecting a team filters
@@ -40,7 +41,6 @@ export default function TeamList({
   const row = (
     key: string,
     id: string | null,
-    emoji: string,
     name: string,
     detail: string,
     color: string | null,
@@ -65,7 +65,7 @@ export default function TeamList({
               : 'hover:bg-slate-200/60 dark:hover:bg-slate-800/60',
           )}
         >
-          <span className="text-sm leading-none" aria-hidden>{emoji}</span>
+          <Mark name={name} color={color ?? '#64748b'} size="sm" />
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-1.5">
               {color && (
@@ -116,7 +116,7 @@ export default function TeamList({
 
       <ul className="space-y-0.5">
         {row(
-          'all', null, '🌐', 'All teams',
+          'all', null, 'All teams',
           `${teams.length} ${teams.length === 1 ? 'team' : 'teams'} · ${totalProjects} ${totalProjects === 1 ? 'project' : 'projects'}`,
           null,
         )}
@@ -124,7 +124,7 @@ export default function TeamList({
           const people = memberCounts.get(t.id) ?? 0
           const built = projectCounts.get(t.id) ?? 0
           return row(
-            t.id, t.id, t.emoji, t.name,
+            t.id, t.id, t.name,
             `${people} ${people === 1 ? 'member' : 'members'} · ${built} ${built === 1 ? 'project' : 'projects'}`,
             t.color, t,
           )

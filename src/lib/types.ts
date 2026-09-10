@@ -309,22 +309,22 @@ export const WORKSPACE_ROLES: { id: WorkspaceRole; label: string; blurb: string 
   { id: 'member',  label: 'Member',  blurb: 'Work on their own team’s boards' },
 ]
 
-export const MILESTONE_KINDS: { id: MilestoneKind; label: string; emoji: string }[] = [
-  { id: 'registration', label: 'Registration', emoji: '📝' },
-  { id: 'build',        label: 'Build',        emoji: '🔨' },
-  { id: 'submission',   label: 'Submission',   emoji: '📦' },
-  { id: 'judging',      label: 'Judging',      emoji: '⚖️' },
-  { id: 'demo',         label: 'Demo day',     emoji: '🎤' },
-  { id: 'custom',       label: 'Custom',       emoji: '📌' },
+export const MILESTONE_KINDS: { id: MilestoneKind; label: string }[] = [
+  { id: 'registration', label: 'Registration' },
+  { id: 'build',        label: 'Build' },
+  { id: 'submission',   label: 'Submission' },
+  { id: 'judging',      label: 'Judging' },
+  { id: 'demo',         label: 'Demo day' },
+  { id: 'custom',       label: 'Custom' },
 ]
 
-export const ATTACHMENT_KINDS: { id: AttachmentKind; label: string; emoji: string }[] = [
-  { id: 'doc',    label: 'Document', emoji: '📄' },
-  { id: 'design', label: 'Design',   emoji: '🎨' },
-  { id: 'repo',   label: 'Repo',     emoji: '💻' },
-  { id: 'video',  label: 'Video',    emoji: '🎬' },
-  { id: 'sheet',  label: 'Sheet',    emoji: '📊' },
-  { id: 'other',  label: 'Link',     emoji: '🔗' },
+export const ATTACHMENT_KINDS: { id: AttachmentKind; label: string }[] = [
+  { id: 'doc',    label: 'Document' },
+  { id: 'design', label: 'Design' },
+  { id: 'repo',   label: 'Repo' },
+  { id: 'video',  label: 'Video' },
+  { id: 'sheet',  label: 'Sheet' },
+  { id: 'other',  label: 'Link' },
 ]
 
 export const GENDERS = ['Female', 'Male', 'Non-binary', 'Prefer not to say']

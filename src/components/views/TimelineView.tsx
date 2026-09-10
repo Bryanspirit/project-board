@@ -97,7 +97,7 @@ function buildTicks(zoom: Zoom, start: string, end: string): { major: Tick[]; mi
 }
 
 function milestoneEmoji(m: Milestone): string {
-  return MILESTONE_KINDS.find(k => k.id === m.kind)?.emoji ?? '📌'
+  return MILESTONE_KINDS.find(k => k.id === m.kind)?.label ?? ''
 }
 
 function buildRows(projects: Project[], tasks: Task[]): Row[] {

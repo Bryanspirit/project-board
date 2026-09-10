@@ -4,6 +4,7 @@ import { Countdown } from './Countdown'
 import { MilestoneDialog } from './MilestoneDialog'
 import { useMilestones } from '../../hooks/useMilestones'
 import { MILESTONE_KINDS } from '../../lib/types'
+import { MILESTONE_ICON } from '../icons'
 import type { Milestone } from '../../lib/types'
 
 const KIND = new Map(MILESTONE_KINDS.map(k => [k.id, k]))
@@ -137,7 +138,7 @@ function TimelineNode({ milestone, state, isNext, first, last, canManage, onEdit
               <path d="M4 10.5l4 4 8-8" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           ) : (
-            <span>{kind.emoji}</span>
+            (() => { const Icon = MILESTONE_ICON[kind.id]; return <Icon className="h-3.5 w-3.5" /> })()
           )}
         </span>
       </div>

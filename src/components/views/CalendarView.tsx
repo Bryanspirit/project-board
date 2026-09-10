@@ -30,7 +30,7 @@ function isOverdue(task: Task, today: string): boolean {
 }
 
 function milestoneEmoji(m: Milestone): string {
-  return MILESTONE_KINDS.find(k => k.id === m.kind)?.emoji ?? '📌'
+  return MILESTONE_KINDS.find(k => k.id === m.kind)?.label ?? 'Milestone'
 }
 
 function personName(people: Profile[], id: string | null): string | null {

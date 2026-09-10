@@ -164,7 +164,7 @@ export default function InstallPrompt() {
           <p className="mt-0.5 text-xs leading-snug text-slate-600 dark:text-slate-400">
             {showIOS ? (
               <>
-                Tap <span aria-hidden="true">⬆︎</span> <span className="font-medium">Share</span>, then{' '}
+                Tap <span aria-hidden="true">︎</span> <span className="font-medium">Share</span>, then{' '}
                 <span className="font-medium">Add to Home Screen</span>.
               </>
             ) : (

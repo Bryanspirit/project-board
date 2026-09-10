@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Workspace, WorkspaceKind, WorkspaceRole } from '../../lib/types'
 import { WORKSPACE_ROLES } from '../../lib/types'
 import { cx } from '../ui'
+import { Mark } from '../Mark'
 
 const KIND_LABELS: Record<WorkspaceKind, string> = {
   personal: 'Personal',
@@ -123,7 +124,9 @@ export default function WorkspaceSwitcher({
           open && 'bg-white dark:bg-slate-800/70',
         )}
       >
-        <span className="text-lg leading-none" aria-hidden>{activeWorkspace?.emoji ?? '🗂️'}</span>
+        {activeWorkspace
+          ? <Mark name={activeWorkspace.name} color={activeWorkspace.color} size="sm" />
+          : <span className="h-6 w-6 shrink-0 rounded-md bg-slate-200 dark:bg-slate-700" aria-hidden />}
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
             {activeWorkspace?.name ?? 'No workspace'}
@@ -183,7 +186,7 @@ export default function WorkspaceSwitcher({
                         : 'hover:bg-slate-100 dark:hover:bg-slate-800/70',
                     )}
                   >
-                    <span className="text-base leading-none" aria-hidden>{w.emoji}</span>
+                    <Mark name={w.name} color={w.color} size="sm" />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm text-slate-800 dark:text-slate-100">
                         {w.name}

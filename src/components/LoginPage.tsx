@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Button, Field, Input, Spinner } from './ui'
+import { BrandMark } from './Mark'
 
 import RequestAccessForm from './access/RequestAccessForm'
 
@@ -51,8 +52,8 @@ export default function LoginPage() {
     <div className="flex min-h-full items-center justify-center bg-gradient-to-br from-slate-50 via-indigo-50/40 to-slate-100 px-4 py-12 dark:from-slate-950 dark:via-indigo-950/20 dark:to-slate-900">
       <div className={mode === 'request' ? 'w-full max-w-2xl' : 'w-full max-w-sm'}>
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-2xl shadow-lg shadow-indigo-600/25">
-            🗂️
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/25">
+            <BrandMark className="h-6 w-6" />
           </div>
           <h1 className="text-xl font-semibold tracking-tight">{copy.title}</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{copy.sub}</p>
@@ -107,7 +108,7 @@ export default function LoginPage() {
           </>}
           {mode !== 'signin' && (
             <button type="button" onClick={() => switchTo('signin')} className="hover:text-indigo-600">
-              ← Back to sign in
+               Back to sign in
             </button>
           )}
         </div>

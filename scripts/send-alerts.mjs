@@ -925,7 +925,7 @@ async function meetings() {
       const tz = profile.timezone || 'UTC'
       const body = `
         ${detailTable([
-          ['When', `${fmtDateTime(meeting.starts_at, tz)} → ${fmtDateTime(meeting.ends_at, tz)}`],
+          ['When', `${fmtDateTime(meeting.starts_at, tz)}  ${fmtDateTime(meeting.ends_at, tz)}`],
           ['Timezone', tz],
           ['Where', meeting.location],
           ['Join link', join],

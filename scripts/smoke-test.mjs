@@ -98,7 +98,7 @@ try {
   // ------------------------------------------------- workspace and team ----
   const wsRes = await as(owner.jwt, '/rest/v1/workspaces', 'POST', {
     name: 'Smoke Hackathon', slug: `smoke-${stamp}`, kind: 'hackathon',
-    owner_id: owner.id, emoji: '🚀', color: '#ef4444',
+    owner_id: owner.id, emoji: '', color: '#ef4444',
     join_code: `SMOKE${String(stamp).slice(-3)}`, join_code_enabled: true, join_role: 'member',
   })
   const ws = wsRes.json?.[0]
@@ -109,7 +109,7 @@ try {
   ok(seat.json?.[0]?.role === 'owner', 'creator is seated as workspace owner')
 
   const teamRes = await as(owner.jwt, '/rest/v1/teams', 'POST',
-    { workspace_id: ws.id, name: 'Smoke Team', created_by: owner.id, emoji: '🦅', color: '#ef4444' })
+    { workspace_id: ws.id, name: 'Smoke Team', created_by: owner.id, emoji: '', color: '#ef4444' })
   const team = teamRes.json?.[0]
   ok(teamRes.status === 201 && Boolean(team), 'create team (with RETURNING)', teamRes.text.slice(0, 120))
 

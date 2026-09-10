@@ -7,7 +7,6 @@ export interface TeamDraft {
   id?: string
   name: string
   description: string
-  emoji: string
   color: string
 }
 
@@ -21,7 +20,6 @@ export function teamDraft(t?: Team): TeamDraft {
     id: t?.id,
     name: t?.name ?? '',
     description: t?.description ?? '',
-    emoji: t?.emoji ?? '🚀',
     color: t?.color ?? PROJECT_COLORS[1],
   }
 }
@@ -30,7 +28,6 @@ export function draftToTeamPatch(d: TeamDraft): Partial<Team> {
   return {
     name: d.name.trim(),
     description: d.description.trim() || null,
-    emoji: d.emoji.trim() || '🚀',
     color: d.color,
   }
 }
@@ -132,10 +129,6 @@ export default function TeamDialog({
       </Field>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="Emoji">
-          <Input value={form.emoji} maxLength={4} onChange={e => set('emoji', e.target.value)}
-            placeholder="🚀" className="text-center text-lg" />
-        </Field>
         <Field label="Colour">
           <div className="flex flex-wrap gap-2 pt-1">
             {PROJECT_COLORS.map(c => (

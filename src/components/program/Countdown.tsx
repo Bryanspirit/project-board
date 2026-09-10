@@ -63,7 +63,6 @@ export function Countdown({ target, label, compact = false }: CountdownProps) {
         'inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium ring-1',
         tone,
       )}>
-        <span aria-hidden>✓</span>
         {label ? <span>{label}</span> : null}
         <span>Ended</span>
       </span>

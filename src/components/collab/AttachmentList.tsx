@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import type { Attachment, AttachmentKind } from '../../lib/types'
 import { ATTACHMENT_KINDS } from '../../lib/types'
+import { ATTACHMENT_ICON } from '../icons'
 import { useCollab } from '../../hooks/useCollab'
 import { Button, Field, Input, Select, Spinner } from '../ui'
 
-const KIND_EMOJI = new Map(ATTACHMENT_KINDS.map(k => [k.id, k.emoji]))
+
 
 /** Only real web links are stored. A `javascript:` or `data:` URL in an anchor
  *  is an attack surface, and a bare "docs.google.com" would resolve relative to
@@ -111,9 +112,10 @@ export function AttachmentList({ taskId, projectId, canEdit }: AttachmentListPro
               key={row.id}
               className="flex items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-2 ring-1 ring-slate-200 dark:bg-slate-800/60 dark:ring-slate-700"
             >
-              <span aria-hidden="true" className="text-base leading-none">
-                {KIND_EMOJI.get(row.kind) ?? '🔗'}
-              </span>
+              {(() => {
+                const Icon = ATTACHMENT_ICON[row.kind] ?? ATTACHMENT_ICON.other
+                return <Icon className="h-4 w-4 shrink-0 text-slate-400" />
+              })()}
               <a
                 href={row.url}
                 target="_blank"
@@ -178,7 +180,7 @@ export function AttachmentList({ taskId, projectId, canEdit }: AttachmentListPro
             <Field label="Kind">
               <Select value={kind} onChange={e => setKind(e.target.value as AttachmentKind)}>
                 {ATTACHMENT_KINDS.map(k => (
-                  <option key={k.id} value={k.id}>{k.emoji} {k.label}</option>
+                  <option key={k.id} value={k.id}>{k.label}</option>
                 ))}
               </Select>
             </Field>

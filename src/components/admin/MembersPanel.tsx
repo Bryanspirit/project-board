@@ -163,7 +163,6 @@ export default function MembersPanel({ members, workspaces, onSetRole, onRemove,
       {groups.known.map(({ workspace, rows }) => (
         <section key={workspace.id} aria-labelledby={`ws-${workspace.id}`}>
           <h3 id={`ws-${workspace.id}`} className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-            <span aria-hidden="true">{workspace.emoji}</span>
             {workspace.name}
             <span className="font-normal text-slate-400">({rows.length})</span>
           </h3>

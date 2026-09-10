@@ -132,9 +132,9 @@ function ShowcaseCard({ row, index }: { row: ProjectHealth; index: number }) {
   const accent = row.color || '#6366f1'
 
   const links: { href: string | null; label: string; emoji: string }[] = [
-    { href: row.repo_url, label: 'Code', emoji: '💻' },
-    { href: row.demo_url, label: 'Demo', emoji: '🚀' },
-    { href: row.video_url, label: 'Video', emoji: '🎬' },
+    { href: row.repo_url, label: 'Code', emoji: '' },
+    { href: row.demo_url, label: 'Demo', emoji: '' },
+    { href: row.video_url, label: 'Video', emoji: '' },
   ]
   const present = links.filter(l => l.href)
 
@@ -218,7 +218,7 @@ function EmptyState({ showUnsubmitted, pending, onReveal }: {
 }) {
   return (
     <div className="mx-auto max-w-md rounded-2xl border border-dashed border-slate-800 px-8 py-16 text-center">
-      <p className="text-4xl" aria-hidden>🎤</p>
+      <p className="text-4xl" aria-hidden></p>
       <h2 className="mt-4 text-lg font-semibold text-white">Nothing on stage yet</h2>
       <p className="mt-2 text-sm text-slate-400">
         {pending > 0

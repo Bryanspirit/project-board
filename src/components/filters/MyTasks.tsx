@@ -113,7 +113,7 @@ function TaskRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
             </span>
             {row.project?.workspace && (
               <span className="truncate text-slate-400 dark:text-slate-500">
-                {row.project.workspace.emoji} {row.project.workspace.name}
+                {row.project.workspace.name}
               </span>
             )}
             {row.status === 'blocked' && (
@@ -249,7 +249,7 @@ export default function MyTasks({ onClose, onOpenTask }: {
 
           {!loading && !error && rows.length === 0 && (
             <div className="flex flex-col items-center justify-center gap-3 px-6 py-20 text-center">
-              <span className="text-4xl" aria-hidden>🎉</span>
+              <span className="text-4xl" aria-hidden></span>
               <h2 className="text-base font-semibold">You are all caught up</h2>
               <p className="max-w-xs text-sm text-slate-500 dark:text-slate-400">
                 Nothing open is assigned to you anywhere. Enjoy it while it lasts.

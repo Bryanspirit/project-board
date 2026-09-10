@@ -6,10 +6,10 @@ import type { Project } from '../../lib/types'
 type LinkKey = 'repo_url' | 'demo_url' | 'video_url' | 'doc_url'
 
 const LINKS: { key: LinkKey; label: string; emoji: string; placeholder: string; hint: string }[] = [
-  { key: 'repo_url',  label: 'Repository', emoji: '💻', placeholder: 'https://github.com/team/project', hint: 'Where the judges read your code.' },
-  { key: 'demo_url',  label: 'Live demo',  emoji: '🚀', placeholder: 'https://project.vercel.app',      hint: 'A deployed build they can click through.' },
-  { key: 'video_url', label: 'Video',      emoji: '🎬', placeholder: 'https://youtu.be/…',              hint: 'Three minutes or less works best.' },
-  { key: 'doc_url',   label: 'Docs',       emoji: '📄', placeholder: 'https://docs.google.com/…',       hint: 'Write-up, deck or README.' },
+  { key: 'repo_url',  label: 'Repository', emoji: '', placeholder: 'https://github.com/team/project', hint: 'Where the judges read your code.' },
+  { key: 'demo_url',  label: 'Live demo',  emoji: '', placeholder: 'https://project.vercel.app',      hint: 'A deployed build they can click through.' },
+  { key: 'video_url', label: 'Video',      emoji: '', placeholder: 'https://youtu.be/…',              hint: 'Three minutes or less works best.' },
+  { key: 'doc_url',   label: 'Docs',       emoji: '', placeholder: 'https://docs.google.com/…',       hint: 'Write-up, deck or README.' },
 ]
 
 /** Blank passes; anything else must parse as an absolute http(s) URL. */
@@ -116,7 +116,7 @@ export function SubmissionPanel({ project, canEdit, onSave }: SubmissionPanelPro
             ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:ring-emerald-900'
             : 'bg-slate-50 text-slate-600 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700',
         )}>
-          <span aria-hidden>{submitted ? '✓' : '○'}</span>
+          <span aria-hidden>{submitted ? '' : '○'}</span>
           {submitted ? 'Submitted' : 'Not submitted'}
         </span>
       </header>

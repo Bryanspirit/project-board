@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { Profile, Project, Task, Team, TeamMember, Workspace, WorkspaceMember, WorkspaceRole } from '../../lib/types'
 import { Button, cx } from '../ui'
+import { Mark } from '../Mark'
 
 function initials(p?: Profile | null) {
   const source = p?.full_name?.trim() || p?.email || '?'
@@ -74,7 +75,6 @@ export default function WorkspaceHome({
   const unassigned = stats.get(null)
 
   function card(key: string, opts: {
-    emoji: string
     name: string
     subtitle: string
     color: string
@@ -96,10 +96,7 @@ export default function WorkspaceHome({
           className="flex flex-1 flex-col text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-indigo-600"
         >
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl text-xl"
-              style={{ backgroundColor: `${opts.color}1a` }} aria-hidden>
-              {opts.emoji}
-            </span>
+            <Mark name={opts.name} color={opts.color} />
             <div className="min-w-0">
               <h3 className="truncate text-sm font-semibold">{opts.name}</h3>
               <p className="truncate text-xs text-slate-500 dark:text-slate-400">{opts.subtitle}</p>
@@ -140,10 +137,7 @@ export default function WorkspaceHome({
   return (
     <div className="mx-auto w-full max-w-6xl px-5 py-8 sm:px-8">
       <section className="mb-8 flex flex-wrap items-start gap-4">
-        <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-3xl"
-          style={{ backgroundColor: `${workspace.color}1a` }} aria-hidden>
-          {workspace.emoji}
-        </span>
+        <Mark name={workspace.name} color={workspace.color} size="lg" />
         <div className="min-w-0 flex-1">
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{workspace.name}</h1>
           <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
@@ -179,7 +173,6 @@ export default function WorkspaceHome({
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {teams.map(t => card(t.id, {
-            emoji: t.emoji,
             name: t.name,
             subtitle: t.description || 'No description',
             color: t.color,
@@ -189,8 +182,7 @@ export default function WorkspaceHome({
           }))}
 
           {unassigned && unassigned.projects > 0 && card('__none__', {
-            emoji: '🌐',
-            name: 'Shared with everyone',
+                        name: 'Shared with everyone',
             subtitle: 'Projects not owned by a team',
             color: workspace.color,
             onOpen: () => onOpenTeam(null),
@@ -229,7 +221,7 @@ export default function WorkspaceHome({
           onClick={() => onOpenTeam(null)}
           className="w-full rounded-xl bg-slate-100 px-5 py-3.5 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800/60 dark:text-slate-200 dark:hover:bg-slate-800"
         >
-          Open every board in this workspace →
+          Open every board in this workspace
         </button>
       </section>
     </div>

@@ -11,7 +11,6 @@ export interface WorkspaceDraft {
   name: string
   description: string
   kind: WorkspaceKind
-  emoji: string
   color: string
   starts_at: string
   ends_at: string
@@ -51,7 +50,6 @@ export function workspaceDraft(w?: Workspace): WorkspaceDraft {
     name: w?.name ?? '',
     description: w?.description ?? '',
     kind: w?.kind ?? 'program',
-    emoji: w?.emoji ?? '🗂️',
     color: w?.color ?? PROJECT_COLORS[0],
     starts_at: toLocalInput(w?.starts_at ?? null),
     ends_at: toLocalInput(w?.ends_at ?? null),
@@ -67,7 +65,6 @@ export function draftToPatch(d: WorkspaceDraft): Partial<Workspace> {
     name: d.name.trim(),
     description: d.description.trim() || null,
     kind: d.kind,
-    emoji: d.emoji.trim() || '🗂️',
     color: d.color,
     starts_at: toISO(d.starts_at),
     ends_at: toISO(d.ends_at),
@@ -160,10 +157,6 @@ export default function WorkspaceDialog({
           <Select value={form.kind} onChange={e => set('kind', e.target.value as WorkspaceKind)}>
             {KINDS.map(k => <option key={k.id} value={k.id}>{k.label}</option>)}
           </Select>
-        </Field>
-        <Field label="Emoji" hint="Shown in the switcher">
-          <Input value={form.emoji} maxLength={4} onChange={e => set('emoji', e.target.value)}
-            placeholder="🚀" className="text-center text-lg" />
         </Field>
       </div>
 

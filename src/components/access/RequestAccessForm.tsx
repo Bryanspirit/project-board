@@ -65,7 +65,7 @@ export default function RequestAccessForm({ onBackToSignIn }: { onBackToSignIn: 
     return (
       <div className="space-y-4">
         <div role="status" className="rounded-2xl bg-white p-6 text-center shadow-xl shadow-slate-200/60 ring-1 ring-slate-200 dark:bg-slate-900 dark:shadow-none dark:ring-slate-800">
-          <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-100 text-xl dark:bg-emerald-950">✅</div>
+          <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-100 text-xl dark:bg-emerald-950"></div>
           <h2 className="text-base font-semibold">Request received</h2>
           <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
             Confirm your email address if we sent you a link, then sit tight — a real person
@@ -174,7 +174,7 @@ export default function RequestAccessForm({ onBackToSignIn }: { onBackToSignIn: 
           onClick={() => setShowCode(true)}
           className="w-full rounded-xl px-3 py-2 text-xs text-slate-500 transition hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400"
         >
-          I have a join code →
+          I have a join code
         </button>
       )}
     </div>

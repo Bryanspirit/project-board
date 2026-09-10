@@ -131,7 +131,6 @@ export default function BoardView({
   if (projects.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 px-6 py-20 text-center">
-        <span className="text-4xl" aria-hidden>🗂️</span>
         <h2 className="text-base font-semibold">No projects here yet</h2>
         <p className="max-w-xs text-sm text-slate-500 dark:text-slate-400">
           Create the first project and start dropping tasks onto the board.

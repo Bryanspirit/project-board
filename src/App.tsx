@@ -47,6 +47,7 @@ import MobileShell from './components/mobile/MobileShell'
 import type { MobileTab } from './components/mobile/MobileShell'
 import MobileBoard from './components/mobile/MobileBoard'
 
+import { BrandMark, Mark } from './components/Mark'
 import { cx } from './components/ui'
 
 /** Where you are in the drill-down: workspaces → one workspace → a board. */
@@ -525,7 +526,7 @@ function BoardApp() {
             className={cx('flex items-center gap-1.5 rounded-md px-2 py-1 transition hover:bg-slate-100 dark:hover:bg-slate-800',
               level === 'workspaces' ? 'font-semibold' : 'text-slate-500 dark:text-slate-400')}
           >
-            <span aria-hidden>🗂️</span>
+            <BrandMark className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
             <span className="hidden sm:inline">Workspaces</span>
           </button>
 
@@ -537,7 +538,7 @@ function BoardApp() {
                 className={cx('flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 transition hover:bg-slate-100 dark:hover:bg-slate-800',
                   level === 'workspace' ? 'font-semibold' : 'text-slate-500 dark:text-slate-400')}
               >
-                <span aria-hidden>{workspace.emoji}</span>
+                <Mark name={workspace.name} color={workspace.color} size="sm" />
                 <span className="truncate">{workspace.name}</span>
               </button>
             </>

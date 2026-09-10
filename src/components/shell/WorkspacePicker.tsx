@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import type { Workspace, WorkspaceRole } from '../../lib/types'
 import { Button, Spinner, cx } from '../ui'
 import JoinCodeCard from '../access/JoinCodeCard'
+import { Mark } from '../Mark'
 
 interface Counts {
   teams: number
@@ -100,13 +101,7 @@ export default function WorkspacePicker({
                 className="group flex flex-col rounded-2xl bg-white p-5 text-left shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-lg hover:ring-slate-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-slate-900 dark:ring-slate-800 dark:hover:ring-slate-700"
               >
                 <div className="flex items-start gap-3">
-                  <span
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-2xl"
-                    style={{ backgroundColor: `${w.color}1a` }}
-                    aria-hidden
-                  >
-                    {w.emoji}
-                  </span>
+                  <Mark name={w.name} color={w.color} className="h-11 w-11" />
                   <div className="min-w-0 flex-1">
                     <h2 className="truncate text-base font-semibold">{w.name}</h2>
                     <div className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -172,7 +167,6 @@ export default function WorkspacePicker({
 
       {active.length === 0 && !loading && (
         <div className="rounded-2xl border border-dashed border-slate-300 py-16 text-center dark:border-slate-700">
-          <p className="text-4xl" aria-hidden>🗂️</p>
           <h2 className="mt-3 text-base font-semibold">You are not in any workspace yet</h2>
           <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500 dark:text-slate-400">
             If you were given a join code, enter it below. Otherwise an administrator

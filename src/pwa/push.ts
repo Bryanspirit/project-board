@@ -158,7 +158,7 @@ export async function disablePush(): Promise<{ ok: boolean; error?: string }> {
 export function describe(state: PushState): string {
   switch (state) {
     case 'ios-needs-install':
-      return 'On iPhone and iPad, notifications only work once the app is added to your Home Screen. Use Share → Add to Home Screen, open it from there, then turn this on.'
+      return 'On iPhone and iPad, notifications only work once the app is added to your Home Screen. Use Share, then "Add to Home Screen", open it from there, then turn this on.'
     case 'unsupported':
       return 'This browser cannot show push notifications.'
     case 'unconfigured':
