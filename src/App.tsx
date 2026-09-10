@@ -733,6 +733,7 @@ function BoardApp() {
         )}
       </div>
 
+      {dialogs}
     </div>
   )
 }
