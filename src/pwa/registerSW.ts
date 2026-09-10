@@ -9,6 +9,52 @@ const noop: UpdateSW = async () => {}
 
 let updateSW: UpdateSW = noop
 let started = false
+let reloading = false
+
+/**
+ * A worker taking control mid-session means the assets on disk have changed
+ * under the running page, so the page has to be re-fetched to match.
+ *
+ * Skipped when there was no controller to begin with: that is the very first
+ * install, where nothing is stale and a reload would be a pointless flash.
+ */
+function reloadOnControllerChange(): void {
+  try {
+    // The worker asks for a reload where it could not navigate the window
+    // itself. Harmless on browsers where navigate() worked.
+    navigator.serviceWorker.addEventListener('message', event => {
+      if (event.data?.type !== 'SW_UPDATED' || reloading) return
+      reloading = true
+      window.location.reload()
+    })
+
+    const had = Boolean(navigator.serviceWorker.controller)
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!had || reloading) return
+      reloading = true
+      window.location.reload()
+    })
+  } catch {
+    /* no serviceWorker on this navigator */
+  }
+}
+
+/**
+ * The browser only looks for a new worker when something asks it to. Without
+ * this, an installed app left open for days never notices a deploy.
+ */
+function pollForUpdates(registration: ServiceWorkerRegistration): void {
+  const check = () => { void registration.update().catch(() => {}) }
+  try {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') check()
+    })
+    window.setInterval(check, 60_000)
+    check()
+  } catch {
+    /* best effort only */
+  }
+}
 
 /**
  * Activates the waiting service worker and reloads. Safe to call at any time —
@@ -58,17 +104,25 @@ export function setupSW(onNeedRefresh?: () => void, onOfflineReady?: () => void)
   if (started || !supported()) return
   started = true
 
+  reloadOnControllerChange()
+
   const start = () => {
     try {
       updateSW = registerSW({
         // We schedule registration ourselves, below.
         immediate: true,
         onNeedRefresh: () => {
+          // Apply it rather than asking. The reload is driven by
+          // controllerchange, so this only has to hand over.
           try {
             onNeedRefresh?.()
           } catch {
             /* a broken callback must not break the worker */
           }
+          void Promise.resolve(updateSW(true)).catch(() => {})
+        },
+        onRegisteredSW: (_swUrl, registration) => {
+          if (registration) pollForUpdates(registration)
         },
         onOfflineReady: () => {
           try {

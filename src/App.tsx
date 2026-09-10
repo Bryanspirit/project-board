@@ -363,8 +363,6 @@ function BoardApp() {
       />
     )}
 
-    <InstallPrompt />
-    <UpdateToast />
     </>
   )
 
@@ -768,6 +766,13 @@ export default function App() {
           onDismiss={() => setInviteToken(null)}
         />
       )}
+
+      {/* Outside AuthGate on purpose: mounting these registers the service
+          worker, and registration is what checks for a new build. Gated behind
+          sign-in, a stale install could never discover an update until after
+          someone had already logged in. */}
+      <InstallPrompt />
+      <UpdateToast />
     </ToastProvider>
   )
 }

@@ -21,9 +21,10 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      // 'prompt' never swaps the running app underneath someone mid-edit — the
-      // new worker waits until the user accepts the UpdateToast.
-      registerType: 'prompt',
+      // 'autoUpdate': a waiting worker that needs a tap to accept is a version
+      // people never take. The app reloads itself instead — see the note on
+      // skipWaiting below for why that is safe here.
+      registerType: 'autoUpdate',
       // We register from src/pwa/registerSW.ts so the app controls the
       // lifecycle; do not let the plugin inject its own <script> as well.
       injectRegister: null,
@@ -52,13 +53,24 @@ export default defineConfig({
       workbox: {
         // The shell only: markup, JS, CSS, icons. No API payloads.
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
+        // Runs inside the worker, so it must not also be precached as an asset.
+        globIgnores: ['sw-force-reload.js'],
+        // Prepended to the generated worker. Reloads windows still showing an
+        // older build once this worker takes over — their own JavaScript is too
+        // old to know an update exists.
+        importScripts: ['sw-force-reload.js'],
         // Relative, so the worker resolves it inside its own scope.
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,
-        // Deliberately false: with registerType 'prompt' the waiting worker
-        // must sit still until the user opts in.
-        skipWaiting: false,
-        clientsClaim: false,
+        // skipWaiting is honoured by the NEW worker during its own install, so
+        // an old worker built without it cannot hold the update back. That is
+        // what lets a device already stuck on a stale build escape.
+        //
+        // Swapping the shell under someone mid-edit is the risk this trades
+        // against, and it is small here: form state lives in a dialog the
+        // reload closes, and everything committed is already in Postgres.
+        skipWaiting: true,
+        clientsClaim: true,
         runtimeCaching: [
           {
             // Supabase — auth tokens, board data, realtime. Never cached: a
