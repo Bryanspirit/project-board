@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef } from 'react'
 import type { Team, TeamMember, TeamRole, WorkspaceMember } from '../../lib/types'
 import { PROJECT_COLORS } from '../../lib/types'
 import { Button, Field, Input, Modal, Select, Textarea, cx } from '../ui'
@@ -55,6 +55,28 @@ export default function TeamDialog({
   onClose: () => void
 }) {
   const [form, setForm] = useState(draft)
+
+  // A create takes a round trip, and the button stayed live for all of it —
+  // two quick clicks made two workspaces. State alone cannot fix that: React
+  // batches the update, so the second click is handled before the re-render
+  // disables anything. The ref shuts the door immediately; the state is only
+  // there to grey the button out.
+  const savingRef = useRef(false)
+  const [saving, setSaving] = useState(false)
+
+  async function commit() {
+    if (savingRef.current) return
+    savingRef.current = true
+    setSaving(true)
+    try {
+      await onSave(form)
+      onClose()
+    } finally {
+      savingRef.current = false
+      setSaving(false)
+    }
+  }
+
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [pickUser, setPickUser] = useState('')
   const [pickRole, setPickRole] = useState<TeamRole>('member')
@@ -111,8 +133,8 @@ export default function TeamDialog({
             )
           )}
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button disabled={!form.name.trim() || busy}
-            onClick={async () => { await onSave(form); onClose() }}>
+          <Button disabled={!form.name.trim() || busy || saving}
+            onClick={() => void commit()}>
             {editing ? 'Save changes' : 'Create team'}
           </Button>
         </>

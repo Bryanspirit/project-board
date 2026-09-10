@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import type { Workspace, WorkspaceKind, WorkspaceRole, Team } from '../../lib/types'
 import { PROJECT_COLORS } from '../../lib/types'
 import { Button, Field, Input, Modal, Select, Textarea, cx } from '../ui'
@@ -88,6 +88,28 @@ export default function WorkspaceDialog({
   onClose: () => void
 }) {
   const [form, setForm] = useState(draft)
+
+  // A create takes a round trip, and the button stayed live for all of it —
+  // two quick clicks made two workspaces. State alone cannot fix that: React
+  // batches the update, so the second click is handled before the re-render
+  // disables anything. The ref shuts the door immediately; the state is only
+  // there to grey the button out.
+  const savingRef = useRef(false)
+  const [saving, setSaving] = useState(false)
+
+  async function commit() {
+    if (savingRef.current) return
+    savingRef.current = true
+    setSaving(true)
+    try {
+      await onSave(form)
+      onClose()
+    } finally {
+      savingRef.current = false
+      setSaving(false)
+    }
+  }
+
   const [confirmArchive, setConfirmArchive] = useState(false)
   const [busy, setBusy] = useState(false)
 
@@ -134,8 +156,8 @@ export default function WorkspaceDialog({
           )}
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button
-            disabled={!form.name.trim() || invalidRange || busy}
-            onClick={async () => { await onSave(form); onClose() }}
+            disabled={!form.name.trim() || invalidRange || busy || saving}
+            onClick={() => void commit()}
           >
             {form.id ? 'Save changes' : 'Create workspace'}
           </Button>

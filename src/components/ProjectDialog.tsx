@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import type { Project, ProjectStatus, Team } from '../lib/types'
 import { PROJECT_COLORS } from '../lib/types'
 import { Button, Field, Input, Modal, Select, Textarea, cx } from './ui'
@@ -48,6 +48,28 @@ export default function ProjectDialog({
   onClose: () => void
 }) {
   const [form, setForm] = useState(draft)
+
+  // A create takes a round trip, and the button stayed live for all of it —
+  // two quick clicks made two workspaces. State alone cannot fix that: React
+  // batches the update, so the second click is handled before the re-render
+  // disables anything. The ref shuts the door immediately; the state is only
+  // there to grey the button out.
+  const savingRef = useRef(false)
+  const [saving, setSaving] = useState(false)
+
+  async function commit() {
+    if (savingRef.current) return
+    savingRef.current = true
+    setSaving(true)
+    try {
+      await onSave(form)
+      onClose()
+    } finally {
+      savingRef.current = false
+      setSaving(false)
+    }
+  }
+
   const [confirmDelete, setConfirmDelete] = useState(false)
   const set = <K extends keyof ProjectDraft>(k: K, v: ProjectDraft[K]) => setForm(f => ({ ...f, [k]: v }))
 
@@ -72,7 +94,7 @@ export default function ProjectDialog({
             )
           )}
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button disabled={!form.name.trim()} onClick={async () => { await onSave(form); onClose() }}>
+          <Button disabled={!form.name.trim() || saving} onClick={() => void commit()}>
             {form.id ? 'Save changes' : 'Create project'}
           </Button>
         </>
