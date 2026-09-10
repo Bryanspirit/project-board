@@ -54,11 +54,11 @@ export default defineConfig({
         // The shell only: markup, JS, CSS, icons. No API payloads.
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
         // Runs inside the worker, so it must not also be precached as an asset.
-        globIgnores: ['sw-force-reload.js'],
+        globIgnores: ['sw-force-reload.js', 'sw-push.js'],
         // Prepended to the generated worker. Reloads windows still showing an
         // older build once this worker takes over — their own JavaScript is too
         // old to know an update exists.
-        importScripts: ['sw-force-reload.js'],
+        importScripts: ['sw-force-reload.js', 'sw-push.js'],
         // Relative, so the worker resolves it inside its own scope.
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,

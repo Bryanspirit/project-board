@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Profile } from '../lib/types'
 import { Button, Modal, Spinner, cx } from './ui'
+import { describe, disablePush, enablePush, pushState } from '../pwa/push'
+import type { PushState } from '../pwa/push'
 
 const TOGGLES: { key: keyof Profile; label: string; detail: string }[] = [
   {
@@ -19,7 +21,69 @@ const TOGGLES: { key: keyof Profile; label: string; detail: string }[] = [
     label: 'Blocker alerts',
     detail: 'Emailed shortly after a task moves into the Blocked column.',
   },
+  {
+    key: 'mention_alerts',
+    label: 'Mentions',
+    detail: 'When someone tags you in a comment.',
+  },
+  {
+    key: 'meeting_alerts',
+    label: 'Meeting reminders',
+    detail: 'Before a meeting you are invited to, with a calendar invite attached.',
+  },
 ]
+
+/**
+ * Push is per device, not per account — the browser owns the subscription, so
+ * a phone and a laptop each have to be turned on where they are sitting. That
+ * is why it lives apart from the e-mail switches rather than among them.
+ */
+function PushRow() {
+  const [state, setState] = useState<PushState | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => { void pushState().then(setState) }, [])
+
+  const on = state === 'on'
+  const actionable = state === 'on' || state === 'off'
+
+  async function toggle() {
+    setBusy(true)
+    setError(null)
+    // Permission must be asked inside this click: Safari and Firefox both
+    // ignore a prompt that did not come from a gesture, and a refusal sticks.
+    const result = on ? await disablePush() : await enablePush()
+    if (!result.ok) setError(result.error ?? 'That did not work.')
+    setState(await pushState())
+    setBusy(false)
+  }
+
+  return (
+    <li className="flex items-start gap-3 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">
+          Push notifications
+          <span className="ml-2 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-normal text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+            this device
+          </span>
+        </p>
+        <p className="mt-0.5 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+          {state === null ? 'Checking…' : describe(state)}
+        </p>
+        {error && (
+          <p role="alert" className="mt-1 text-xs text-rose-600 dark:text-rose-400">{error}</p>
+        )}
+      </div>
+      {actionable ? (
+        <Toggle label="Push notifications on this device" on={on}
+          onChange={() => { if (!busy) void toggle() }} />
+      ) : (
+        <span className="shrink-0 text-xs text-slate-400">unavailable</span>
+      )}
+    </li>
+  )
+}
 
 function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
@@ -83,6 +147,7 @@ export default function SettingsDialog({ userId, email, onClose }: {
 
       {profile && (
         <ul className="divide-y divide-slate-200 dark:divide-slate-800">
+          <PushRow />
           {TOGGLES.map(t => (
             <li key={t.key} className="flex items-start gap-3 py-3">
               <div className="min-w-0 flex-1">

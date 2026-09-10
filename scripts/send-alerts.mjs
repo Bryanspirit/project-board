@@ -25,6 +25,7 @@
 import { createClient } from '@supabase/supabase-js'
 import nodemailer from 'nodemailer'
 import { buildIcs } from './lib/ics.mjs'
+import { pushConfigured, pushTo, subscriptionsFor } from './lib/push.mjs'
 
 const MODES = ['daily', 'weekly', 'blocked', 'access', 'mentions', 'meetings', 'admin-digest']
 
@@ -412,6 +413,32 @@ async function loadUsers(flag) {
   }))
 }
 
+
+// ------------------------------------------------------------------ push --
+
+/**
+ * Sends a push alongside the e-mail for the sweeps where a phone buzz is
+ * genuinely useful: something addressed to you, or something now stuck.
+ *
+ * Digests are deliberately excluded — a summary is a thing to read, not an
+ * interruption, and pushing one every morning is how people turn notifications
+ * off altogether.
+ *
+ * Failures are swallowed. E-mail remains the channel of record, and the caller
+ * stamps `notified_at` on the strength of that, not this.
+ */
+async function alsoPush(profile, subsByUser, notice) {
+  if (!pushConfigured || !profile?.push_alerts) return
+  const subs = subsByUser.get(profile.id)
+  if (!subs?.length) return
+  try {
+    const n = await pushTo(subs, { ...notice, url: appLink(notice.hash ?? ''), dryRun: DRY_RUN })
+    if (n) console.log(`  pushed to ${plural(n, 'device')} for ${profile.email}`)
+  } catch (err) {
+    console.warn(`  push skipped for ${profile.email}: ${err?.message ?? err}`)
+  }
+}
+
 // ------------------------------------------------------------------ modes --
 
 async function daily() {
@@ -527,7 +554,10 @@ async function weekly() {
 }
 
 async function blocked() {
-  for (const { profile, tasks, projectName } of await loadUsers('blocker_alerts')) {
+  const people = await loadUsers('blocker_alerts')
+  const subsByUser = await subscriptionsFor(people.map(p => p.profile.id))
+
+  for (const { profile, tasks, projectName } of people) {
     const fresh = tasks.filter(t => t.status === 'blocked' && !t.blocked_notified_at)
     if (fresh.length === 0) continue
 
@@ -546,6 +576,14 @@ async function blocked() {
         body,
       }),
     )
+
+    await alsoPush(profile, subsByUser, {
+      title: fresh.length === 1 ? 'A task is blocked' : `${fresh.length} tasks are blocked`,
+      body: fresh.length === 1
+        ? `${fresh[0].title}${fresh[0].blocked_reason ? ` — ${fresh[0].blocked_reason}` : ''}`
+        : fresh.slice(0, 3).map(t => t.title).join(', '),
+      tag: 'blocked',
+    })
 
     // Stamp only after a successful send, so a mail failure retries next run.
     if (!DRY_RUN) {
@@ -738,6 +776,8 @@ async function mentions() {
     grouped.get(mention.mentioned_user_id).push(mention)
   }
 
+  const mentionSubs = await subscriptionsFor([...grouped.keys()])
+
   for (const [userId, group] of grouped) {
     const profile = personById.get(userId)
     if (!profile?.email) {
@@ -784,6 +824,17 @@ async function mentions() {
       }
       continue
     }
+
+    const firstComment = commentById.get(group.find(m => commentById.has(m.comment_id))?.comment_id)
+    const firstAuthor = firstComment ? personById.get(firstComment.author_id) : null
+
+    await alsoPush(profile, mentionSubs, {
+      title: cards.length === 1
+        ? `${displayName(firstAuthor)} mentioned you`
+        : `${cards.length} new mentions`,
+      body: excerpt(firstComment?.body ?? '', 120),
+      tag: 'mentions',
+    })
 
     await send(
       profile.email,
@@ -838,6 +889,8 @@ async function meetings() {
   const workspaces = await selectIn('workspaces', 'id,name', 'id', upcoming.map(m => m.workspace_id))
   const workspaceById = byId(workspaces)
 
+  const meetingSubs = await subscriptionsFor(people.map(p => p.id))
+
   for (const meeting of upcoming) {
     const invited = attendees.filter(a => a.meeting_id === meeting.id)
     const everyEmail = unique(invited.map(a => personById.get(a.user_id)?.email).filter(Boolean))
@@ -883,6 +936,12 @@ async function meetings() {
         <div style="font-size:12px;color:#94a3b8;line-height:1.7;margin-top:12px">
           The attached invite adds this to your calendar.
         </div>`
+
+      await alsoPush(profile, meetingSubs, {
+        title: `Starting soon: ${meeting.title}`,
+        body: fmtDateTime(meeting.starts_at, tz),
+        tag: `meeting-${meeting.id}`,
+      })
 
       await send(
         profile.email,
