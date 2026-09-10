@@ -114,18 +114,20 @@ export function Modal({ title, onClose, children, footer }: {
     // Bottom sheet on a phone, centred dialog from `sm` up. Doing it in CSS
     // rather than behind a media-query hook means there is no first-paint flash
     // of the wrong shape, and it works with the keyboard open on iOS.
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 backdrop-blur-sm sm:items-start sm:overflow-y-auto sm:p-8">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 backdrop-blur-sm sm:items-center sm:p-6">
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
         className={cx(
           'flex w-full flex-col bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800',
-          // Phone: anchored to the bottom edge, never taller than the viewport,
-          // and clear of the home indicator.
+          // Constrained at every width, because the body below is the only
+          // thing that scrolls. Letting the card grow past the viewport put the
+          // footer under the fold and left the backdrop as the sole scroller —
+          // which the body's overscroll-contain then blocked, so a wheel over
+          // the dialog did nothing at all.
           'max-h-[92dvh] rounded-t-2xl pb-[env(safe-area-inset-bottom)]',
-          // Desktop: the familiar centred card.
-          'sm:my-auto sm:max-h-none sm:max-w-lg sm:rounded-2xl sm:pb-0',
+          'sm:max-h-[calc(100dvh-3rem)] sm:max-w-lg sm:rounded-2xl sm:pb-0',
         )}
         onClick={e => e.stopPropagation()}
       >
