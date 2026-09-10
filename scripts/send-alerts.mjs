@@ -7,7 +7,7 @@
  *   node scripts/send-alerts.mjs blocked       newly blocked tasks, once each
  *   node scripts/send-alerts.mjs access        approval queue: tell the admin, tell the applicant
  *   node scripts/send-alerts.mjs mentions      @mention digests
- *   node scripts/send-alerts.mjs meetings      meetings inside 24h, with an .ics invite
+ *   node scripts/send-alerts.mjs meetings      invitations when booked, reminders inside 24h
  *   node scripts/send-alerts.mjs admin-digest  weekly roll-up for workspace owners and admins
  *
  * Runs from GitHub Actions on a schedule. Reads with the Supabase service role
@@ -860,17 +860,19 @@ async function mentions() {
 
 async function meetings() {
   const from = new Date()
-  const until = new Date(from.getTime() + 24 * 60 * 60 * 1000)
+  const REMINDER_WINDOW_MS = 24 * 60 * 60 * 1000
 
+  // Every future meeting, not just the imminent ones: somebody invited to a
+  // meeting three weeks out should hear about it when it is booked, and the
+  // reminder is a separate thing that fires the day before.
   const { data: upcoming, error } = await db.from('meetings')
     .select('*')
     .eq('status', 'scheduled')
     .gte('starts_at', from.toISOString())
-    .lte('starts_at', until.toISOString())
     .order('starts_at', { ascending: true })
   if (error) throw error
   if (!upcoming?.length) {
-    console.log('no meetings in the next 24 hours')
+    console.log('no scheduled meetings ahead')
     return
   }
 
@@ -913,8 +915,16 @@ async function meetings() {
       status: meeting.status === 'cancelled' ? 'CANCELLED' : 'CONFIRMED',
     })
 
+    const soon = new Date(meeting.starts_at).getTime() - from.getTime() <= REMINDER_WINDOW_MS
+
     for (const attendee of invited) {
-      if (attendee.notified_at) continue
+      // Inside the reminder window the reminder is the more useful of the two,
+      // so an attendee added at the last minute gets that rather than both.
+      const kind = soon
+        ? (attendee.notified_at ? null : 'reminder')
+        : (attendee.invite_notified_at ? null : 'invite')
+      if (!kind) continue
+
       const profile = personById.get(attendee.user_id)
       if (!profile?.email) continue
       if (profile.meeting_alerts === false || profile.status !== 'active') {
@@ -938,17 +948,23 @@ async function meetings() {
         </div>`
 
       await alsoPush(profile, meetingSubs, {
-        title: `Starting soon: ${meeting.title}`,
+        title: kind === 'invite'
+          ? `Invited: ${meeting.title}`
+          : `Starting soon: ${meeting.title}`,
         body: fmtDateTime(meeting.starts_at, tz),
-        tag: `meeting-${meeting.id}`,
+        tag: `meeting-${meeting.id}-${kind}`,
       })
 
       await send(
         profile.email,
-        `[Board] ${meeting.title} — ${fmtDateTime(meeting.starts_at, tz)}`,
+        kind === 'invite'
+          ? `[Board] Invitation: ${meeting.title}`
+          : `[Board] ${meeting.title} — ${fmtDateTime(meeting.starts_at, tz)}`,
         layout({
-          title: 'Meeting reminder',
-          intro: `<strong>${escapeHtml(meeting.title)}</strong> starts at <strong>${escapeHtml(fmtDateTime(meeting.starts_at, tz))}</strong>.`,
+          title: kind === 'invite' ? 'You are invited' : 'Meeting reminder',
+          intro: kind === 'invite'
+            ? `You have been added to <strong>${escapeHtml(meeting.title)}</strong>, at <strong>${escapeHtml(fmtDateTime(meeting.starts_at, tz))}</strong>.`
+            : `<strong>${escapeHtml(meeting.title)}</strong> starts at <strong>${escapeHtml(fmtDateTime(meeting.starts_at, tz))}</strong>.`,
           body,
           ctaUrl: join || APP_URL,
           ctaLabel: join ? 'Join the meeting' : 'Open the board',
@@ -962,7 +978,10 @@ async function meetings() {
 
       if (!DRY_RUN) {
         const { error: stampError } = await db.from('meeting_attendees')
-          .update({ notified_at: nowISO() }).eq('id', attendee.id)
+          .update(kind === 'invite'
+            ? { invite_notified_at: nowISO() }
+            : { notified_at: nowISO() })
+          .eq('id', attendee.id)
         if (stampError) throw stampError
       }
     }

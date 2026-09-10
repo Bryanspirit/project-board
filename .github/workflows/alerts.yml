@@ -8,7 +8,7 @@ on:
     - cron: '*/15 * * * *'   # blocker sweep, every 15 minutes
     - cron: '5-59/15 * * * *'  # approval queue sweep, every 15 minutes (offset)
     - cron: '10-59/15 * * * *' # @mention digests, every 15 minutes (offset)
-    - cron: '20 * * * *'     # meeting reminders, hourly
+    - cron: '2-59/15 * * * *'  # meeting invites + reminders, every 15 minutes
     - cron: '30 7 * * 1'     # admin roll-up, Monday at 07:30 (after the weekly)
   workflow_dispatch:
     inputs:
@@ -57,8 +57,9 @@ jobs:
             "0 7 * * 1")        echo "value=weekly"       >> "$GITHUB_OUTPUT" ;;
             "*/15 * * * *")     echo "value=blocked"      >> "$GITHUB_OUTPUT" ;;
             "5-59/15 * * * *")  echo "value=access"       >> "$GITHUB_OUTPUT" ;;
+            "2-59/15 * * * *")  echo "value=meetings"     >> "$GITHUB_OUTPUT" ;;
             "10-59/15 * * * *") echo "value=mentions"     >> "$GITHUB_OUTPUT" ;;
-            "20 * * * *")       echo "value=meetings"     >> "$GITHUB_OUTPUT" ;;
+
             "30 7 * * 1")       echo "value=admin-digest" >> "$GITHUB_OUTPUT" ;;
             *)                  echo "value=${{ inputs.mode || 'daily' }}" >> "$GITHUB_OUTPUT" ;;
           esac
