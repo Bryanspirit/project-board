@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { Profile, Project, Task, Team, TeamMember, Workspace, WorkspaceMember, WorkspaceRole } from '../../lib/types'
 import { Button, cx } from '../ui'
 import { Mark } from '../Mark'
@@ -29,6 +29,36 @@ function Avatars({ members }: { members: TeamMember[] }) {
       )}
       {members.length === 0 && (
         <span className="text-[11px] text-slate-400">No members yet</span>
+      )}
+    </div>
+  )
+}
+
+
+/** Long descriptions are common and useful, but an essay above the fold buries
+ *  the teams underneath it on a phone. Collapsed to four lines with a way out. */
+function Description({ text }: { text: string | null }) {
+  const [open, setOpen] = useState(false)
+  const body = text?.trim()
+  if (!body) {
+    return <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">No description yet.</p>
+  }
+  // Measuring the rendered height would be exact but costs a layout pass on
+  // every render; the length is a good enough proxy for "this needs a toggle".
+  const long = body.length > 180
+  return (
+    <div className="mt-1">
+      <p className={cx('max-w-2xl text-sm leading-relaxed text-slate-500 dark:text-slate-400',
+        long && !open && 'line-clamp-4')}>
+        {body}
+      </p>
+      {long && (
+        <button
+          onClick={() => setOpen(o => !o)}
+          className="mt-1 text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+        >
+          {open ? 'Show less' : 'Show more'}
+        </button>
       )}
     </div>
   )
@@ -136,19 +166,19 @@ export default function WorkspaceHome({
 
   return (
     <div className="mx-auto w-full max-w-6xl px-5 py-8 sm:px-8">
-      <section className="mb-8 flex flex-wrap items-start gap-4">
-        <Mark name={workspace.name} color={workspace.color} size="lg" />
-        <div className="min-w-0 flex-1">
+      <section className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start">
+        <div className="flex min-w-0 flex-1 items-start gap-4">
+          <Mark name={workspace.name} color={workspace.color} size="lg" />
+          <div className="min-w-0 flex-1">
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{workspace.name}</h1>
-          <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-            {workspace.description || 'No description yet.'}
-          </p>
+          <Description text={workspace.description} />
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
             <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-medium capitalize dark:bg-slate-800">
               {workspace.kind}
             </span>
             {role && <span>You are {role === 'owner' || role === 'admin' ? 'an' : 'a'} {role}</span>}
             <span>· {workspaceMembers.length} member{workspaceMembers.length === 1 ? '' : 's'}</span>
+          </div>
           </div>
         </div>
 

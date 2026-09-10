@@ -60,10 +60,18 @@ export function MilestoneTimeline({ workspaceId, canManage, className }: Milesto
           <Spinner className="h-4 w-4" /> Loading milestones…
         </div>
       ) : milestones.length === 0 ? (
-        <div className="px-4 py-8 text-center">
+        // One slim line rather than a tall empty card: on a phone this sits
+        // above the workspace itself, and eight rems of nothing pushes the
+        // teams — the reason you opened the page — off the screen.
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-3">
           <p className="text-sm text-slate-500 dark:text-slate-400">No milestones yet.</p>
           {canManage && (
-            <Button size="sm" className="mt-3" onClick={() => setEditing(null)}>Add the first one</Button>
+            <button
+              onClick={() => setEditing(null)}
+              className="text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+            >
+              Add the first one
+            </button>
           )}
         </div>
       ) : (
