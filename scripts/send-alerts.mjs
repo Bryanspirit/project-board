@@ -297,8 +297,18 @@ function quote(text, accent = '#cbd5e1') {
   </div>`
 }
 
+const DRY_RUN_DIR = process.env.DRY_RUN_DIR || ''
+let dryRunSeq = 0
+
 async function send(to, subject, html, attachments) {
   if (DRY_RUN) {
+    if (DRY_RUN_DIR) {
+      // Seeing the mail beats counting its bytes when a template changes.
+      const { mkdirSync, writeFileSync } = await import('node:fs')
+      mkdirSync(DRY_RUN_DIR, { recursive: true })
+      const safe = String(subject).replace(/[^a-z0-9]+/gi, '-').slice(0, 60)
+      writeFileSync(`${DRY_RUN_DIR}/${String(++dryRunSeq).padStart(2, '0')}-${safe}.html`, html)
+    }
     const extra = attachments?.length ? ` + ${plural(attachments.length, 'attachment')}` : ''
     console.log(`\n--- DRY RUN -> ${to}\nSubject: ${subject}\n${html.length} bytes of HTML${extra}\n`)
     return
@@ -598,6 +608,86 @@ async function blocked() {
 // --------------------------------------------------------------- access ----
 
 /** Where the approval queue mail goes. The profiles flag wins; ADMIN_EMAIL is the fallback. */
+
+/** Plain-English rendering of a workspace role, for the approval email. */
+const ROLE_BLURB = {
+  owner: 'Full control of the workspace, its teams and everyone in it.',
+  admin: 'Manage teams, members and every board in the workspace.',
+  manager: 'Run your team and the projects it owns.',
+  member: "Work on your own team's boards.",
+  judge: 'Read every project in the workspace.',
+}
+
+/**
+ * What a newly approved person was actually granted.
+ *
+ * Read from the membership rows rather than from the request, so the mail
+ * describes what is true at the moment it is sent — an admin who changed their
+ * mind between deciding and this running is reflected, not contradicted.
+ */
+async function grantsFor(userId) {
+  if (!userId) return { spaces: [], teams: [] }
+
+  const { data: memberships } = await db.from('workspace_members')
+    .select('role, workspace:workspaces(id, name, kind)')
+    .eq('user_id', userId)
+
+  const { data: teamRows } = await db.from('team_members')
+    .select('role, team:teams(id, name, workspace_id)')
+    .eq('user_id', userId)
+
+  return {
+    spaces: (memberships ?? []).filter(m => m.workspace),
+    teams: (teamRows ?? []).filter(t => t.team),
+  }
+}
+
+
+/**
+ * Greets accounts the instant path did not reach.
+ *
+ * notify-welcome fires from a trigger the moment a profile appears, but it can
+ * be down, unconfigured, or the vault secret absent — in which case nobody
+ * would ever hear back from a signup. This closes that.
+ */
+async function welcomeStragglers() {
+  const { data: rows, error } = await db.from('profiles')
+    .select('*').is('welcome_sent_at', null).order('created_at', { ascending: true }).limit(50)
+  if (error) throw error
+  if (!rows?.length) return
+
+  for (const profile of rows) {
+    if (!profile.email) continue
+    const name = profile.full_name?.trim() || profile.email.split('@')[0]
+    const pending = profile.status === 'pending'
+
+    await send(
+      profile.email,
+      pending ? '[Board] We have your request' : '[Board] Welcome to the board',
+      layout({
+        title: pending ? 'Request received' : 'Welcome aboard',
+        intro: `Hello ${escapeHtml(name)} — thank you for signing up.`,
+        body: pending
+          ? `<div style="font-size:14px;color:#334155;line-height:1.7">
+               Your details are with an administrator now. Once they approve you, a second
+               email will tell you which workspace you have joined and what you can do there.
+             </div>`
+          : `<div style="font-size:14px;color:#334155;line-height:1.7">
+               Your account is active and you can sign in straight away.
+             </div>`,
+        ctaUrl: pending ? '' : APP_URL,
+      }),
+    )
+
+    if (!DRY_RUN) {
+      const { error: stampError } = await db.from('profiles')
+        .update({ welcome_sent_at: nowISO() }).eq('id', profile.id)
+      if (stampError) throw stampError
+    }
+  }
+  console.log(`welcomed ${plural(rows.length, 'new account')} the instant path missed`)
+}
+
 async function superAdminRecipients() {
   const { data, error } = await db.from('profiles')
     .select('id,email,full_name').eq('is_super_admin', true)
@@ -644,6 +734,10 @@ function requestCard(request) {
  * Second half: applicants whose request has been decided but never told.
  */
 async function access() {
+  // Signups first: somebody should hear back even if their request is still
+  // sitting in the queue.
+  await welcomeStragglers()
+
   const { data: requests, error } = await db.from('access_requests')
     .select('*').order('created_at', { ascending: true })
   if (error) throw error
@@ -697,12 +791,39 @@ async function access() {
     const name = request.full_name?.trim() || request.email
     const approved = request.status === 'approved'
 
+    const grants = approved ? await grantsFor(request.user_id) : { spaces: [], teams: [] }
+
+    const accessRows = grants.spaces.map(m => {
+      const mine = grants.teams.filter(t => t.team.workspace_id === m.workspace.id)
+      return `
+      <tr><td style="padding:10px 0;border-bottom:1px solid #f1f5f9">
+        <div style="font-size:15px;font-weight:600;color:#0f172a">${escapeHtml(m.workspace.name)}</div>
+        <div style="font-size:12px;color:#94a3b8;margin-top:3px;text-transform:capitalize">
+          ${escapeHtml(m.workspace.kind)} &nbsp;·&nbsp; you are ${escapeHtml(m.role)}
+        </div>
+        <div style="font-size:13px;color:#475569;line-height:1.6;margin-top:6px">
+          ${escapeHtml(ROLE_BLURB[m.role] ?? '')}
+        </div>
+        ${mine.length ? `<div style="font-size:13px;color:#475569;line-height:1.6;margin-top:6px">
+             Team: ${mine.map(t => `<strong>${escapeHtml(t.team.name)}</strong>${t.role === 'lead' ? ' (lead)' : ''}`).join(', ')}
+           </div>` : ''}
+      </td></tr>`
+    }).join('')
+
     const body = approved
       ? `${heading('You are in', '#059669')}
          <div style="font-size:14px;color:#334155;line-height:1.7">
-           Your account is active. Sign in with <strong>${escapeHtml(request.email)}</strong> and your
-           workspace will be waiting on the other side.
+           Your account is active. Sign in with <strong>${escapeHtml(request.email)}</strong>.
          </div>
+         ${accessRows
+           ? heading('What you can reach', '#4f46e5')
+             + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${accessRows}</table>`
+             + `<div style="font-size:12px;color:#94a3b8;line-height:1.7;margin-top:10px">
+                  You will only ever see the workspaces listed here.
+                </div>`
+           : `<div style="font-size:13px;color:#94a3b8;line-height:1.7;margin-top:8px">
+                An administrator will add you to a workspace shortly.
+              </div>`}
          ${request.decision_note ? quote(request.decision_note, '#059669') : ''}`
       : `${heading('About your request', '#64748b')}
          <div style="font-size:14px;color:#334155;line-height:1.7">
